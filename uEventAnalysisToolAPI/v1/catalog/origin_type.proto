@@ -1,0 +1,16 @@
+edition = "2023";
+
+package uEventAnalysisToolAPI.V1.Catalog;
+
+/**
+ * Defines the origin type.
+ */
+enum OriginType {
+    // The origin type is unknown.
+    ORIGIN_TYPE_UNKNOWN = 0;
+    // The origin corresponds to a hypocenter which is an initiation point.  This is the typical location method.
+    ORIGIN_TYPE_HYPOCENTER = 1;
+    // The origin corresponds to a centroid.  This would derive from a moment tensor inversion.
+    ORIGIN_TYPE_CENTROID  = 2;
+}
+

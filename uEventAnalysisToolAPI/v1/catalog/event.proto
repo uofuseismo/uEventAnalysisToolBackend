@@ -1,0 +1,22 @@
+edition = "2023";
+
+package uEventAnalysisToolAPI.Catalog;
+
+import "uEventAnalysisToolAPI/v1/catalog/event_type.proto";
+import "uEventAnalysisToolAPI/v1/catalog/agency_code.proto";
+
+/**
+ * Defines an event in a catalog.
+ */
+message Event {
+   /// The event identifier
+   string identifier = 1;
+   /// The event's preferred origin.
+   Origin origin = 2;
+   /// The event's preferred magnitude.
+   Magnitude magnitude = 3;
+   /// The events's type.
+   EventType type = 4;
+   /// The agency that created the event - e.g., UU for University of Utah. 
+   AgencyCode agency = 5;
+}

@@ -1,0 +1,27 @@
+edition = "2023";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/type/latlng.proto";
+
+package uEventAnalysisTool.V1.Catalog;
+
+import "uEventAnalysisToolAPI/v1/origin_type.proto";
+
+/**
+ * Defines an event's origin.  This could be a centroid or a hypocenter.
+ */
+message Origin {
+   // The origin identifier.
+   string identifier = 1; 
+   // The latitude and longitude of the event.
+   google.protobuf.LatLng epicenter = 2;
+   // The origin's depth in meters.
+   double depth = 3;
+   // The origin's time (UTC).
+   google.protobuf.Timestamp time = 4;
+   // The type - e.g., a hypocenter or centroid.
+   OriginType type = 5 [default = ORIGIN_TYPE_HYPOCENTER];
+   // True indicates the origin is in the agency's authoritative region.
+   bool in_authoritative_region = 6;
+   // True indicates the origin was reviewed (otherwise it is purely automatic).
+   bool reviewed = 7;
+}

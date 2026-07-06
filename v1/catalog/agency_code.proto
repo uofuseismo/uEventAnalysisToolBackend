@@ -1,0 +1,19 @@
+edition = "2023";
+
+package uEventAnalysisToolAPI.V1.Catalog;
+
+/**
+ * The agency that produced the event.
+ */
+enum AgencyCode {
+    // The event type is unknown.
+    AGENCY_CODE_UNKNOWN = 0;
+    // University of Utah Seismograph Stations.
+    AGENCY_CODE_UU = 1;
+    // United States Geologic Survey (NEIC).
+    AGENCY_CODE_US = 2;
+    // Nevada Seismic Laboratory
+    AGENCY_CODE_NN = 3;
+    // Montana 
+    AGENCY_CODE_MB = 4;
+}

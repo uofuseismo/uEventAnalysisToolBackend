@@ -1,0 +1,22 @@
+edition = "2023";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/type/latlng.proto";
+
+package uEventAnalysisToolAPI.V1.Catalog;
+
+import "uEventAnalysisToolAPI/v1/magnitude_type.proto";
+
+/**
+ * Defines an event's magnitude.  
+ */
+message Magnitude {
+   // The magnitude identifier.
+   string identifier = 1;  
+   // The magnitude of the event - e.g., 2.3.
+   double value = 2;
+   // The magnitude type.
+   MagnitudeType type = 3;
+   // True indicates the magnitude was reviewed (otherwise it is purely automatic).
+   bool reviewed = 4;
+}
+

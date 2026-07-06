@@ -1,0 +1,20 @@
+edition = "2023";
+
+package uEventAnalysisTool.V1.Catalog;
+
+/**
+ * Defines the magnitude type.
+ */
+enum MagnitudeType {
+    // The magnitude type is unknown.
+    MAGNITUDE_TYPE_UNKNOWN = 0;
+    // This is a local (Richter) magnitude (Ml).
+    MAGNITUDE_TYPE_LOCAL = 1;
+    // This is a duration magnitude (Md).
+    MAGNITUDE_TYPE_DURATION = 2;
+    // This is a moment magnitude (Mw).
+    MAGNITUDE_TYPE_MOMENT = 3;
+    // This is a human-assigned magnitude (Mh).
+    MAGNITUDE_TYPE_HUMAN = 4;
+}
+

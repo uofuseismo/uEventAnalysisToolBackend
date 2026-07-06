@@ -1,0 +1,16 @@
+edition = "2023";
+
+package uEventAnalysisToolAPI.V1.Catalog;
+
+/**
+ * Defines the event type.
+ */
+enum EventType {
+    // The event type is unknown.
+    EVENT_TYPE_UNKNOWN = 0;
+    // The event is an earthquake.
+    EVENT_TYPE_EARTHQUAKE = 1;
+    // The event is a quarry blast.
+    EVENT_TYPE_QUARRY_BLAST = 2;
+}
+

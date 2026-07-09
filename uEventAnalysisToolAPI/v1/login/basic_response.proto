@@ -7,7 +7,7 @@ import "uEventAnalysisToolAPI/v1/login/mode.proto";
 /**
  * Defines a response to a basic login request.
  */
-message Request {
+message BasicResponse {
    /// The identifier corresponding to the input request identifier.
    string identifier = 1;
    /// The JSON web token.  This token should be passed by the user in the subsequent

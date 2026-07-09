@@ -1,0 +1,31 @@
+edition = "2023";
+import "google/protobuf/Timestamp.proto";
+
+package uEventAnalysisTool.V1.Locator;
+
+/**
+ * Defines the lower and upper uncertainty bounds for the pick.  
+ */
+message Uncertainty {
+   // The statistical model underlying the pick.
+   enum Model {
+      Unknown = 0; 
+      // A Gaussian model.  In this case, the pick is at the maximum likelihood which 
+      // is also the 50'th percentile.  
+      Gaussian = 1
+   };
+   // Uncertainty is parameterized as a bound and percentile.  The percentile has
+   // a physical time that helps it easily map to the pick time.
+   message Bound {
+      // The percentile of the bound (this is in the range of 0 to 100).
+      double percentile = 1;
+      // The time (UTC) to which this bound corresponds.
+      google.protobuf.Timestamp time = 2;
+   }
+   /// The statistical model.
+   Model model = 1 [default = UNCERTAINTY_MODEL_GAUSSIAN];
+   /// The lower bound.  This should be less than the maximum likelihood estimate - i.e., the observed pick time.
+   Bound lower_bound = 2;
+   /// The upper bound.  This should be greater than the maximum likelihood estimate - i.e., the observed pick time.
+   Bound upper_bound = 3;
+}

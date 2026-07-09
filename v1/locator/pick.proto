@@ -1,0 +1,29 @@
+edition = "2023";
+import "google/protobuf/timestamp.proto";
+
+package uEventAnalysisTool.V1.Locator;
+
+import "uEventAnalysisToolAPI/v1/locator/phase.proto";
+import "uEventAnalysisToolAPI/v1/locator/uncertainty.proto";
+import "uEventAnalysisToolAPI/v1/locator/stream_identifier.proto";
+
+/**
+ * Defines a pick - a high-frequency approxmition that describes the onset of seismic
+ * energy for a particular phase.
+ */
+message Pick {
+   /// The phase identifier.
+   string identifier = 1;
+   /// The stream identifier on which the pick was made.
+   StreamIdentifier stream_identifier = 2;
+   /// The time of the pick (UTC).
+   google.protobuf.Timestamp time = 3;
+   /// The phase of the pick.
+   Phase phase = 4;
+   /// The person or algorithm who made the pick.
+   string author = 5;
+   /// If true then the pick's time was determined by some automated method.
+   bool automatic = 6;
+   /// The uncertainty bounds on the pick.
+   Uncertainty uncertainty = 7;
+}

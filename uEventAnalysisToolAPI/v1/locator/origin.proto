@@ -4,7 +4,8 @@ import "google/protobuf/type/latlng.proto";
 
 package uEventAnalysisTool.V1.Catalog;
 
-import "uEventAnalysisToolAPI/v1/locator/pick.proto";
+import "uEventAnalysisToolAPI/v1/locator/observed_pick.proto";
+import "uEventAnalysisToolAPI/v1/locator/estimate_pick.proto";
 
 /**
  * Defines an event's origin.  In particular, this is an event's hypocenter.
@@ -19,9 +20,9 @@ message Origin {
    // The origin's time (UTC).
    google.protobuf.Timestamp time = 4;
    // The observed pick times.
-   Repeated observed_picks = 5;
+   repeated ObservedPick observed_picks = 5;
    // The estimate pick times.  Note, this should match one-to-one the observed picks.  Residuals can then be computed as observed - estimated.
-   Repeated estimate_picks = 6;
+   repeated EstimatePick estimate_picks = 6;
    // True indicates the origin was reviewed by a human.
    bool reviewed = 7;
    // The human or algorithm that computed this location.

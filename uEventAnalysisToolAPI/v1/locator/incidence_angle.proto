@@ -1,0 +1,29 @@
+edition = "2023";
+
+package uEventAnalysisTool.V1.Locator;
+
+/**
+ * This is a measure of the pick's angle of incidence at the receiver. It is measured positive 
+ * from from 0 (straight down).  The maximum is 90 (e.g., a wave propagating along the surface).
+ */
+message IncidenceAngle {
+   /// Defines from where the back-azimuth was computed.
+   enum Method {
+      /// The incidence angle was not computed.
+      METHOD_NOT_COMPUTED = 0,
+      /// It is unknown how the incidence angle was computed.
+      METHOD_UNKNOWN = 1,
+      /// The incidence angle was computed using geometry.  For observed data 
+      /// this likely will never happen.  For synthetic data computed from raypaths
+      /// this will likely be the correct choice.
+      METHOD_FROM_GEOMETRY = 2,
+      /// The incidence angle was estimated from the waveform data.  For example, this could
+      /// be done using a polarization analysis techinque - e.g., the SVD of the data
+      /// covariance matrix.  
+      METHOD_FROM_DATA = 3
+   };
+   /// The value of the incidence angle in degrees.
+   double value [default = 0] = 1;
+   /// The method from which the incidence angle was computed.
+   Method method [default = METHOD_NOT_COMPUTED] = 2;
+}

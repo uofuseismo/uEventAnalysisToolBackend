@@ -7,12 +7,14 @@ import "uEventAnalysisToolAPI/v1/locator/phase.proto";
 import "uEventAnalysisToolAPI/v1/locator/uncertainty.proto";
 import "uEventAnalysisToolAPI/v1/locator/stream_identifier.proto";
 import "uEventAnalysisToolAPI/v1/locator/frame.proto";
+import "uEventAnalysisToolAPI/v1/locator/back_azimuth.proto";
+import "uEventAnalysisToolAPI/v1/locator/incidence_angle.proto";
 
 /**
  * Defines a pick - a high-frequency approxmition that describes the onset of seismic
  * energy for a particular phase.
  */
-message Pick {
+message ObservedPick {
    /// The phase identifier.
    string identifier = 1;
    /// The stream identifier(s) on which the pick was made.  
@@ -34,11 +36,8 @@ message Pick {
    Uncertainty uncertainty = 7;
    /// The reference frame in which the pick was made.  
    Frame frame = 8;
-   /// The source-receiver epicentral distance in kilometers.  This will be non-negative.
-   double distance = 9;
-   /// The receiver to source angle measured in degrees positive east of north.
-   /// This will be in the range of 0 and 360.
-   double back_azimuth = 10;
-   /// The incidence angle measured positive from north down.
-   double incidence_angle = 11;
+   /// The back-azimuth.
+   BackAzimuth back_azimuth = 9;
+   /// The incidence angle.
+   IncidenceAngle incidence_angle = 10;
 }

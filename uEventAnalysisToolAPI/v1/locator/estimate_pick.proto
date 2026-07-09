@@ -1,0 +1,36 @@
+edition = "2023";
+import "google/protobuf/timestamp.proto";
+
+package uEventAnalysisTool.V1.Locator;
+
+import "uEventAnalysisToolAPI/v1/locator/phase.proto";
+import "uEventAnalysisToolAPI/v1/locator/uncertainty.proto";
+import "uEventAnalysisToolAPI/v1/locator/stream_identifier.proto";
+import "uEventAnalysisToolAPI/v1/locator/frame.proto";
+import "uEventAnalysisToolAPI/v1/locator/back_azimuth.proto";
+import "uEventAnalysisToolAPI/v1/locator/incidence_angle.proto";
+
+/**
+ * Defines a pick - a high-frequency approxmition that describes the onset of seismic
+ * energy for a particular phase.  This pick derives from a calculation that used
+ * the origin for it's location.
+ */
+message EstimatePick {
+   /// The observed phase identifier.  This allows us to map the estimate to the 
+   /// observed pick.
+   string identifier = 1;
+   /// The time of the pick (UTC).
+   google.protobuf.Timestamp time = 2;
+   /// The phase of the pick.
+   Phase phase = 3;
+   /// The algorithm that computed the pick.
+   string algorithm = 4 [default = ""];
+   /// The great-circle source-receiver distance in meters.
+   double distance = 5;
+   /// The back-azimuth.
+   BackAzimuth back_azimuth = 6;
+   /// The incidence angle.
+   IncidenceAngle incidence_angle = 7;
+   /// The takeoff angle.
+   //TakeOffAngle takeoff_angle = 8;
+}

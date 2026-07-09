@@ -10,12 +10,14 @@ option(USE_CLANG_TIDY "Build using clang-tidy" OFF)
 include(GenerateExportHeader)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
+set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 if(POLICY CMP0167)
   cmake_policy(SET CMP0167 NEW)
 endif()
 if (NOT ${BUILD_SHARED_LIBS})
    set(Boost_USE_STATIC_LIBS ON) 
 endif()
+find_package(Protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 if (${WITH_CONAN})
    message("Will use Conan OTLP exporters")
@@ -77,12 +79,18 @@ set(LIBRARY_SRC
     lib/database/credentials.cpp
     lib/version.cpp)
 set(LOGIN_PROTO_SRC
+    uEventAnalysisToolAPI/v1/login/mode.proto
     uEventAnalysisToolAPI/v1/login/basic_request.proto
     uEventAnalysisToolAPI/v1/login/basic_response.proto
-    uEventAnalysisToolAPI/v1/login/service.proto)
+    uEventAnalysisToolAPI/v1/login/service.proto
+    )
 set(PROTO_SRC ${LOGIN_PROTO_SRC})
 
-add_library(libuEventAnalysisToolBackend STATIC ${LIBRARY_SRC} ${PROTO_SRC})
+if (${BUILD_SHARED_LIBS})
+   add_library(libuEventAnalysisToolBackend SHARED ${LIBRARY_SRC} ${PROTO_SRC})
+else()
+   add_library(libuEventAnalysisToolBackend STATIC ${LIBRARY_SRC} ${PROTO_SRC})
+endif()
 add_library(uEventAnalysisToolBackend::libuEventAnalysisToolBackend ALIAS libuEventAnalysisToolBackend)
 set_target_properties(libuEventAnalysisToolBackend PROPERTIES
                       OUTPUT_NAME uEventAnalysisToolBackend
@@ -90,12 +98,14 @@ set_target_properties(libuEventAnalysisToolBackend PROPERTIES
                       CXX_STANDARD_REQUIRED YES 
                       CXX_EXTENSIONS NO) 
 target_include_directories(libuEventAnalysisToolBackend
-                           PRIVATE $<INSTALL_INTERFACE:include>
+                           PRIVATE $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
                            PRIVATE $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
                            PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+                           PUBLIC  $<INSTALL_INTERFACE:>
                           )
 target_link_libraries(libuEventAnalysisToolBackend
-                      PRIVATE jwt-cpp::jwt-cpp
+                      PRIVATE protobuf::libprotobuf gRPC::grpc gRPC::grpc++
+                              jwt-cpp::jwt-cpp
                               libpqxx::pqxx
                               spdlog::spdlog_header_only
                               Boost::headers
@@ -131,9 +141,9 @@ set_target_properties(uEventAnalysisToolBackend PROPERTIES
                       CXX_STANDARD_REQUIRED YES
                       CXX_EXTENSIONS NO)
 target_include_directories(uEventAnalysisToolBackend
-                           PRIVATE $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
                            PRIVATE $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
-                           PRIVATE $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
+                           PRIVATE $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+                           PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
                           )
 target_link_libraries(uEventAnalysisToolBackend
                       PRIVATE libuEventAnalysisToolBackend)

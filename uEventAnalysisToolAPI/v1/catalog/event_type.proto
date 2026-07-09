@@ -1,6 +1,6 @@
 edition = "2023";
 
-package uEventAnalysisToolAPI.V1.Catalog;
+package UEventAnalysisToolAPI.V1.Catalog;
 
 /**
  * Defines the event type.

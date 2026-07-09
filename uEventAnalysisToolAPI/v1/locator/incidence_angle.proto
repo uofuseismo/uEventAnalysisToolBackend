@@ -1,6 +1,6 @@
 edition = "2023";
 
-package uEventAnalysisTool.V1.Locator;
+package UEventAnalysisTool.V1.Locator;
 
 /**
  * This is a measure of the pick's angle of incidence at the receiver. It is measured positive 

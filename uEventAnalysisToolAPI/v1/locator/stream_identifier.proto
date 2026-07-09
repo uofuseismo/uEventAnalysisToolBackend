@@ -1,7 +1,7 @@
 edition = "2023";
 import "google/protobuf/timestamp.proto";
 
-package uEventAnalysisTool.V1.Locator;
+package UEventAnalysisTool.V1.Locator;
 
 /**
  * Identifiers the stream on which the pick was made.

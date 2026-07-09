@@ -1,6 +1,6 @@
 edition = "2023";
 
-package uEventAnalysisToolAPI.V1.Locator;
+package uEventAnalysisToolAPI.V1.Login;
 
 /**
  * Defines the user's application mode.  This will matched against the user's privileges

@@ -1,0 +1,20 @@
+edition = "2023";
+
+package uEventAnalysisToolAPI.V1.Locator;
+
+/**
+ * Defines the reference frame in which the pick was made.
+ */
+enum Frame {
+    // The frame is unknown.
+   FRAME_UNKNOWN = 0;
+   // This a observation frame - i.e., the data was not rotated in any way. 
+   FRAME_OBSERVATION = 1;
+   // The pick was made in a frame where the non-vertical channels were 
+   // rotated about their (back) azimuth's.  This is useful for S-wave picking. 
+   FRAME_VERTICAL_RADIAL_TRANSVERSE = 2;
+   // The pick was made in a completely rotated frame where the longitudinal
+   // should be used for the P pick and the transverse should be used for the S pick.  
+   // This reuqires knowledge of the (back) azimuth and incidence angle.
+   FRAME_LONGITUDINAL_RADIAL_TRANSVERSE = 3;
+}

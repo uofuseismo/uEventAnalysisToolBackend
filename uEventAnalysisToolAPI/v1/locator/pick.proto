@@ -6,6 +6,7 @@ package uEventAnalysisTool.V1.Locator;
 import "uEventAnalysisToolAPI/v1/locator/phase.proto";
 import "uEventAnalysisToolAPI/v1/locator/uncertainty.proto";
 import "uEventAnalysisToolAPI/v1/locator/stream_identifier.proto";
+import "uEventAnalysisToolAPI/v1/locator/frame.proto";
 
 /**
  * Defines a pick - a high-frequency approxmition that describes the onset of seismic
@@ -14,8 +15,13 @@ import "uEventAnalysisToolAPI/v1/locator/stream_identifier.proto";
 message Pick {
    /// The phase identifier.
    string identifier = 1;
-   /// The stream identifier on which the pick was made.
-   StreamIdentifier stream_identifier = 2;
+   /// The stream identifier(s) on which the pick was made.  
+   /// For example, a P pick is normally made on just the vertical (Z) channel.  
+   /// Conversely, an S pick could be made on the North and East (1 and 2) channels 
+   /// that were rotated into the Radial Transverse frame.  In that case, there would 
+   /// be two stream identifiers - one for the North and one for the East channel.
+   /// Alternatively, a deep-learning picker may use all three channels in some opaque manner.
+   repeated StreamIdentifier stream_identifier = 2;
    /// The time of the pick (UTC).
    google.protobuf.Timestamp time = 3;
    /// The phase of the pick.
@@ -26,4 +32,13 @@ message Pick {
    bool automatic = 6;
    /// The uncertainty bounds on the pick.
    Uncertainty uncertainty = 7;
+   /// The reference frame in which the pick was made.  
+   Frame frame = 8;
+   /// The source-receiver epicentral distance in kilometers.  This will be non-negative.
+   double distance = 9;
+   /// The receiver to source angle measured in degrees positive east of north.
+   /// This will be in the range of 0 and 360.
+   double back_azimuth = 10;
+   /// The incidence angle measured positive from north down.
+   double incidence_angle = 11;
 }

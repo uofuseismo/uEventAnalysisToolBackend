@@ -4,7 +4,7 @@ import "google/protobuf/type/latlng.proto";
 
 package uEventAnalysisTool.V1.Catalog;
 
-import "uEventAnalysisToolAPI/v1/origin_type.proto";
+import "uEventAnalysisToolAPI/v1/catalog/origin_type.proto";
 
 /**
  * Defines an event's origin.  This could be a centroid or a hypocenter.

@@ -1,0 +1,18 @@
+edition = "2023";
+import "google/protobuf/timestamp.proto";
+
+package uEventAnalysisTool.V1.Locator;
+
+/**
+ * Identifiers the stream on which the pick was made.
+ */
+message StreamIdentifier {
+   /// The network code - e.g,. UU.
+   string network = 1;
+   /// The station code - e.g., ZNPU.
+   string station = 2;
+   /// The channel code - e.g., HHZ.
+   string channel = 3;
+   /// The location code - e.g., 01.
+   string location_code = 4 [default = "--"];
+}

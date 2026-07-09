@@ -4,7 +4,7 @@ import "google/protobuf/type/latlng.proto";
 
 package uEventAnalysisToolAPI.V1.Catalog;
 
-import "uEventAnalysisToolAPI/v1/magnitude_type.proto";
+import "uEventAnalysisToolAPI/v1/catalog/magnitude_type.proto";
 
 /**
  * Defines an event's magnitude.  

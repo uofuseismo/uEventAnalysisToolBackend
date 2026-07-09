@@ -1,0 +1,15 @@
+edition = "2023";
+
+package uEventAnalysisToolAPI.V1.Locator;
+
+/**
+ * Defines the available seismic phases for the locator.
+ */
+enum Phase {
+    // The phase is unknown.  This indicates an error.
+    PHASE_UNKNOWN = 0;
+    // The phase corresonds to the first arriving compressional wave.  
+    PHASE_P = 1;
+    // The phase corresponds to the first arriving shear wave. 
+    PHASE_S = 2;
+}

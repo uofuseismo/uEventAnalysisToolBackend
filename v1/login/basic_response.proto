@@ -1,6 +1,6 @@
 edition = "2023";
 
-package uEventAnalysisToolAPI.V1.Login;
+package UEventAnalysisToolAPI.V1.Login;
 
 import "uEventAnalysisToolAPI/v1/login/mode.proto";
 

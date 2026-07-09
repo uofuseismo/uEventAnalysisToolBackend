@@ -1,6 +1,6 @@
 edition = "2023";
 
-package UDataPacketCacheServiceAPI.V1.Login;
+package UEventAnalysisToolAPI.V1.Login;
 
 import "uEventAnalysisToolAPI/v1/login/basic_request.proto";
 import "uEventAnalysisToolAPI/v1/login/basic_response.proto";

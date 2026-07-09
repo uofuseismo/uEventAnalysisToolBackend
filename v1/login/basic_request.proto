@@ -9,7 +9,7 @@ import "uEventAnalysisToolAPI/v1/login/mode.proto";
  */
 message BasicRequest {
    /// A request identifier.
-   string identifier [default = ""] = 1;
+   string identifier = 1 [default = ""];
    /// The desired application mode.
    Mode mode = 2;
 }

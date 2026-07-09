@@ -1,6 +1,6 @@
 edition = "2023";
 
-package uEventAnalysisToolAPI.V1.Locator;
+package UEventAnalysisToolAPI.V1.Locator;
 
 /**
  * Defines the reference frame in which the pick was made.

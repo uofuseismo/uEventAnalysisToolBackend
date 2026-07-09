@@ -2,7 +2,7 @@ edition = "2023";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/type/latlng.proto";
 
-package uEventAnalysisToolAPI.V1.Catalog;
+package UEventAnalysisToolAPI.V1.Catalog;
 
 import "uEventAnalysisToolAPI/v1/catalog/magnitude_type.proto";
 

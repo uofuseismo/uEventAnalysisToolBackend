@@ -1,6 +1,6 @@
 edition = "2023";
 
-package uEventAnalysisTool.V1.Catalog;
+package UEventAnalysisTool.V1.Catalog;
 
 /**
  * Defines the magnitude type.

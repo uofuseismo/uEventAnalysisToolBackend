@@ -1,7 +1,7 @@
 edition = "2023";
 import "google/protobuf/Timestamp.proto";
 
-package uEventAnalysisTool.V1.Locator;
+package UEventAnalysisTool.V1.Locator;
 
 /**
  * Defines the lower and upper uncertainty bounds for the pick.  

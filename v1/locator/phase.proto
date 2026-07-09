@@ -1,6 +1,6 @@
 edition = "2023";
 
-package uEventAnalysisToolAPI.V1.Locator;
+package UEventAnalysisToolAPI.V1.Locator;
 
 /**
  * Defines the available seismic phases for the locator.

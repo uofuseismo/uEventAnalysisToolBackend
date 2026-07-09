@@ -1,6 +1,6 @@
 edition = "2023";
 
-package uEventAnalysisToolAPI.Catalog;
+package UEventAnalysisToolAPI.V1.Catalog;
 
 import "uEventAnalysisToolAPI/v1/catalog/event_type.proto";
 import "uEventAnalysisToolAPI/v1/catalog/agency_code.proto";

@@ -1,6 +1,6 @@
 edition = "2023";
 
-package uEventAnalysisTool.V1.Locator;
+package UEventAnalysisTool.V1.Locator;
 
 /**
  * This is a measure of the receiver to source angle.  The back-azimuth is 

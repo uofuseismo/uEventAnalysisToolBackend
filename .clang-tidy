@@ -1,0 +1,18 @@
+---
+Checks:             '-*,bugprone-*,
+                    -bugprone-branch-clone,
+                    -bugprone-exception-escape,
+                    -bugprone-lambda-function-name,
+                    -bugprone-misplaced-widening-cast,
+                    -bugprone-not-null-terminated-result,
+                    performance-*,
+                    -performance-noexcept-move-constructor,
+                    misc-*,
+                    -misc-non-private-member-variables-in-classes,
+                    -misc-unused-parameters
+                    '
+WarningsAsErrors: false
+HeaderFileExtensions: ['h','hh','hpp','hxx']
+HeaderFilterRegex: 'include/uEventAnalysisToolBackend/.*uEventAnalysisToolBackend.*(?<!\.pb\.h)$'
+InheritParentConfig: true
+...

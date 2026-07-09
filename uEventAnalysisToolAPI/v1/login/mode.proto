@@ -8,9 +8,9 @@ package uEventAnalysisToolAPI.V1.Login;
  */
 enum Mode {
    // This a read-write mode that allows users to process events.
-   MODE_PROCESS = 1;
+   MODE_PROCESS = 0;
    // This is read-only mode that allows users to review events.
-   MODE_REVIEW = 2;
+   MODE_REVIEW = 1;
    // This is a read-only mode that allows users to process but not submit events.
-   MODE_TRAINING = 3;
+   MODE_TRAINING = 2;
 }

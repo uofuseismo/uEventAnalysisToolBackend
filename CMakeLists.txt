@@ -76,8 +76,13 @@ set(LIBRARY_SRC
     lib/auth/openldapOptions.cpp
     lib/database/credentials.cpp
     lib/version.cpp)
+set(LOGIN_PROTO_SRC
+    uEventAnalysisToolAPI/v1/login/basic_request.proto
+    uEventAnalysisToolAPI/v1/login/basic_response.proto
+    uEventAnalysisToolAPI/v1/login/service.proto)
+set(PROTO_SRC ${LOGIN_PROTO_SRC})
 
-add_library(libuEventAnalysisToolBackend STATIC ${LIBRARY_SRC})
+add_library(libuEventAnalysisToolBackend STATIC ${LIBRARY_SRC} ${PROTO_SRC})
 add_library(uEventAnalysisToolBackend::libuEventAnalysisToolBackend ALIAS libuEventAnalysisToolBackend)
 set_target_properties(libuEventAnalysisToolBackend PROPERTIES
                       OUTPUT_NAME uEventAnalysisToolBackend
@@ -103,21 +108,21 @@ target_sources(libuEventAnalysisToolBackend
                       FILES
                          ${HEADER_FILES}
                )
-#protobuf_generate(TARGET libuEventAnalysisToolBackend
-#                  LANGUAGE cpp
-#                  OUT_VAR PROTO_GENERATED_CXX_FILES
-#                 )
-#protobuf_generate(TARGET libuEventAnalysisToolBackend
-#                  LANGUAGE grpc
-#                  PLUGIN "protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin>"
-#                  PLUGIN_OPTIONS generate_mock_code=true
-#                  GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
-#                  OUT_VAR PROTO_GENERATED_FILES
-#                 )
-#set_source_files_properties(${PROTO_GENERATED_FILES} ${PROTO_GENERATED_CXX_FILES}
-#   PROPERTIES
-#      SKIP_LINTING ON
-#)
+protobuf_generate(TARGET libuEventAnalysisToolBackend
+                  LANGUAGE cpp
+                  OUT_VAR PROTO_GENERATED_CXX_FILES
+                 )
+protobuf_generate(TARGET libuEventAnalysisToolBackend
+                  LANGUAGE grpc
+                  PLUGIN "protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin>"
+                  PLUGIN_OPTIONS generate_mock_code=true
+                  GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
+                  OUT_VAR PROTO_GENERATED_FILES
+                 )
+set_source_files_properties(${PROTO_GENERATED_FILES} ${PROTO_GENERATED_CXX_FILES}
+   PROPERTIES
+      SKIP_LINTING ON
+)
 
 add_executable(uEventAnalysisToolBackend
                src/main.cpp)

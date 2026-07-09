@@ -1,0 +1,16 @@
+edition = "2023";
+
+package uEventAnalysisToolAPI.V1.Locator;
+
+/**
+ * Defines the user's application mode.  This will matched against the user's privileges
+ * and may result in the user not being authorized.
+ */
+enum Mode {
+   // This a read-write mode that allows users to process events.
+   MODE_PROCESS = 1;
+   // This is read-only mode that allows users to review events.
+   MODE_REVIEW = 2;
+   // This is a read-only mode that allows users to process but not submit events.
+   MODE_TRAINING = 3;
+}

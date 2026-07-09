@@ -1,0 +1,20 @@
+edition = "2023";
+
+package uEventAnalysisToolAPI.V1.Login;
+
+import "uEventAnalysisToolAPI/v1/login/mode.proto";
+
+/**
+ * Defines a response to a basic login request.
+ */
+message Request {
+   /// The identifier corresponding to the input request identifier.
+   string identifier = 1;
+   /// The JSON web token.  This token should be passed by the user in the subsequent
+   /// requests in headers i.e., the Bearer <jwt> - HTTP Header field.
+   string json_web_token = 2;
+   /// The realized application mode.
+   Mode mode = 3;
+   /// Further details accompanying the login request.
+   string details = 4;
+}

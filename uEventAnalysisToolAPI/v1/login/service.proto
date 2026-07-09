@@ -1,0 +1,16 @@
+edition = "2023";
+
+package UDataPacketCacheServiceAPI.V1;
+
+import "uEventAnalysisToolAPI/v1/login/basic_request.proto";
+import "uEventAnalysisToolAPI/v1/login/basic_response.proto";
+/**
+ * Handles a login requests for a user.  
+ */
+service LoginService {
+   // A basic login request.  In this case the client will pass their
+   // credentials in the HTTP Authorization: Basic safsadfsdfsd== field where
+   // the user name and password are a base64 encoded string of the from
+   // user:password  
+   rpc BasicLogin(BasicRequest) returns(BasicResponse) {}; 
+}

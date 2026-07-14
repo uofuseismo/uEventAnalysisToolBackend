@@ -32,6 +32,8 @@ find_package(Boost REQUIRED headers program_options REQUIRED)
 find_package(Threads REQUIRED)
 find_package(libpqxx REQUIRED)
 find_package(jwt-cpp CONFIG REQUIRED)
+find_package(libsodium REQUIRED)
+find_package(OpenLDAP REQUIRED)
 if (BUILD_TESTS)
    find_package(Catch2 3 REQUIRED)
 endif()
@@ -68,16 +70,45 @@ configure_file(${CMAKE_SOURCE_DIR}/lib/version.hpp.in
                ${CMAKE_SOURCE_DIR}/include/uEventAnalysisToolBackend/version.hpp)
 
 set(HEADER_FILES
+    include/uEventAnalysisToolBackend/auth/database.hpp
+    include/uEventAnalysisToolBackend/auth/databaseOptions.hpp
     include/uEventAnalysisToolBackend/auth/jsonWebToken.hpp
     include/uEventAnalysisToolBackend/auth/openldap.hpp
     include/uEventAnalysisToolBackend/auth/openldapOptions.hpp
-    include/uEventAnalysisToolBackend/version.hpp)
+    include/uEventAnalysisToolBackend/database/credentials.hpp
+    include/uEventAnalysisToolBackend/version.hpp
+    )
+set(WILL_BE_DELETED_HEADER_FILES
+    include/uEventAnalysisToolBackend/database/aqms/aqms.hpp
+    include/uEventAnalysisToolBackend/database/aqms/arrival.hpp
+    include/uEventAnalysisToolBackend/database/aqms/durationMagnitude.hpp
+    include/uEventAnalysisToolBackend/database/aqms/event.hpp
+    include/uEventAnalysisToolBackend/database/aqms/humanMagnitude.hpp
+    include/uEventAnalysisToolBackend/database/aqms/localMagnitude.hpp
+    include/uEventAnalysisToolBackend/database/aqms/magnitude.hpp
+    include/uEventAnalysisToolBackend/database/aqms/origin.hpp
+    include/uEventAnalysisToolBackend/database/aqms/streamIdentifier.hpp)
 set(LIBRARY_SRC
+    lib/auth/database.cpp
+    lib/auth/databaseOptions.cpp
+    #lib/auth/authenticator.cpp
     lib/auth/jsonWebToken.cpp
     lib/auth/openldap.cpp
     lib/auth/openldapOptions.cpp
     lib/database/credentials.cpp
-    lib/version.cpp)
+    lib/version.cpp
+    )
+set(WILL_BE_DELETED_SRC
+    lib/database/aqms/aqms.cpp
+    lib/database/aqms/streamIdentifier.cpp
+    lib/database/aqms/arrival.cpp
+    lib/database/aqms/magnitude.cpp
+    lib/database/aqms/localMagnitude.cpp
+    lib/database/aqms/durationMagnitude.cpp
+    lib/database/aqms/humanMagnitude.cpp
+    lib/database/aqms/origin.cpp
+    lib/database/aqms/event.cpp
+    )
 set(LOGIN_PROTO_SRC
     uEventAnalysisToolAPI/v1/login/mode.proto
     uEventAnalysisToolAPI/v1/login/basic_request.proto
@@ -87,9 +118,9 @@ set(LOGIN_PROTO_SRC
 set(PROTO_SRC ${LOGIN_PROTO_SRC})
 
 if (${BUILD_SHARED_LIBS})
-   add_library(libuEventAnalysisToolBackend SHARED ${LIBRARY_SRC} ${PROTO_SRC})
+   add_library(libuEventAnalysisToolBackend SHARED ${LIBRARY_SRC} ${WILL_BE_DELETED_SRC} ${PROTO_SRC})
 else()
-   add_library(libuEventAnalysisToolBackend STATIC ${LIBRARY_SRC} ${PROTO_SRC})
+   add_library(libuEventAnalysisToolBackend STATIC ${LIBRARY_SRC} ${WILL_BE_DELETED_SRC} ${PROTO_SRC})
 endif()
 add_library(uEventAnalysisToolBackend::libuEventAnalysisToolBackend ALIAS libuEventAnalysisToolBackend)
 set_target_properties(libuEventAnalysisToolBackend PROPERTIES
@@ -108,7 +139,9 @@ target_link_libraries(libuEventAnalysisToolBackend
                               jwt-cpp::jwt-cpp
                               libpqxx::pqxx
                               spdlog::spdlog_header_only
-                              Boost::headers
+                              Boost::headers Boost::program_options
+                              libsodium::libsodium
+                              openldap::openldap
                               Threads::Threads)
 target_sources(libuEventAnalysisToolBackend
                PUBLIC FILE_SET
@@ -117,6 +150,7 @@ target_sources(libuEventAnalysisToolBackend
                          include
                       FILES
                          ${HEADER_FILES}
+                         ${WILL_BE_DELETED_HEADER_FILES}
                )
 protobuf_generate(TARGET libuEventAnalysisToolBackend
                   LANGUAGE cpp
@@ -146,7 +180,25 @@ target_include_directories(uEventAnalysisToolBackend
                            PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
                           )
 target_link_libraries(uEventAnalysisToolBackend
-                      PRIVATE libuEventAnalysisToolBackend)
+                      PRIVATE uEventAnalysisToolBackend::libuEventAnalysisToolBackend
+                              openldap::openldap
+                              Boost::headers Boost::program_options)
+
+add_executable(uEventAnalysisToolUserManager
+               src/manageUsers.cpp)
+set_target_properties(uEventAnalysisToolUserManager PROPERTIES
+                      CXX_STANDARD 23
+                      CXX_STANDARD_REQUIRED YES 
+                      CXX_EXTENSIONS NO) 
+target_include_directories(uEventAnalysisToolUserManager
+                           PRIVATE $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+                           PRIVATE $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+                           PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+                          )
+target_link_libraries(uEventAnalysisToolUserManager
+                      PRIVATE uEventAnalysisToolBackend::libuEventAnalysisToolBackend
+                              Boost::headers Boost::program_options)
+
 
 
 ##########################################################################################
@@ -156,6 +208,7 @@ if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
    add_executable(unitTests
                   testing/auth/options.cpp
                   testing/database/credentials.cpp
+                  testing/database/aqms.cpp
    )
    set_target_properties(unitTests PROPERTIES
                          CXX_STANDARD 23
@@ -195,7 +248,7 @@ install(TARGETS libuEventAnalysisToolBackend
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         COMPONENT libraries)
-install(TARGETS uEventAnalysisToolBackend
+install(TARGETS uEventAnalysisToolBackend uEventAnalysisToolUserManager
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         COMPONENT applications)
 install(EXPORT ${PROJECT_NAME}Targets

@@ -35,6 +35,7 @@ class uWaveServer(ConanFile):
        self.requires("boost/1.89.0")
        self.requires("openldap/2.6.7")
        #self.requires("openssl/4.0.1")
+       self.requires('libsodium/1.0.22')
 
    def build_requirements(self):
        # test dependncies and build tools

@@ -1,0 +1,39 @@
+#ifndef UEVENT_ANALYSIS_TOOL_BACKEND_HPP
+#define UEVENT_ANALYSIS_TOOL_BACKEND_HPP
+#include <string>
+#define uEventAnalysisToolBackend_MAJOR  @uEventAnalysisToolBackend_VERSION_MAJOR@
+#define uEventAnalysisToolBackend_MINOR  @uEventAnalysisToolBackend_VERSION_MINOR@
+#define uEventAnalysisToolBackend_PATCH  @uEventAnalysisToolBackend_VERSION_PATCH@
+#define uEventAnalysisToolBackend_GITTAG "@uEventAnalysisToolBackend_GITTAG@"
+#define uEventAnalysisToolBackend_VERSION "@PROJECT_VERSION@"
+namespace UEventAnalysisToolBackend
+{
+/// @class Version version.hpp "uEventAnalysisToolBackend/version.hpp"
+/// @brief Defines the library's version information.
+/// @copyright Ben Baker (University of Utah) distributed under the MIT license.
+class Version
+{
+public:
+    /// @result The API's major version number.
+    [[nodiscard]] static int getMajor() noexcept;
+    /// @result The API's minor version number.
+    [[nodiscard]] static int getMinor() noexcept;
+    /// @result The API's patch version number.
+    [[nodiscard]] static int getPatch() noexcept;
+    /// @result The full version number as a string, e.g., "1.2.3".
+    [[nodiscard]] static std::string getVersion() noexcept;
+    /// @result The full version number as a string with the tag, e.g., "1.2.3-abc123".
+    [[nodiscard]] static std::string getVersionWithTag() noexcept;
+    /// @result The git tag.
+    [[nodiscard]] static std::string getTag() noexcept;
+    /// @brief Determines if the version is greater than or equal to
+    ///        the current (major, minor, patch).
+    /// @param[in] major  The major version number.
+    /// @param[in] minor  The minor version number.
+    /// @param[in] patch  The patch number.
+    /// @result True indicates that the version is at least equal to the
+    ///         given major, minor, patch.
+    [[nodiscard]] static bool isAtLeast(int major, int minor, int patch) noexcept;
+};
+}
+#endif

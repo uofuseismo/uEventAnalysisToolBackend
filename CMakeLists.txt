@@ -26,7 +26,7 @@ else()
    find_package(opentelemetry-cpp CONFIG COMPONENTS exporters_otlp_http REQUIRED)
 endif()
 find_package(spdlog REQUIRED)
-find_package(Boost REQUIRED headers program_options REQUIRED)
+find_package(Boost REQUIRED headers json program_options REQUIRED)
 #find_package(openldap REQUIRED)
 #find_package(TBB COMPONENTS tbb REQUIRED)
 find_package(Threads REQUIRED)
@@ -70,6 +70,8 @@ configure_file(${CMAKE_SOURCE_DIR}/lib/version.hpp.in
                ${CMAKE_SOURCE_DIR}/include/uEventAnalysisToolBackend/version.hpp)
 
 set(HEADER_FILES
+    include/uEventAnalysisToolBackend/auth/authenticator.hpp
+    include/uEventAnalysisToolBackend/auth/authNZ.hpp
     include/uEventAnalysisToolBackend/auth/database.hpp
     include/uEventAnalysisToolBackend/auth/databaseOptions.hpp
     include/uEventAnalysisToolBackend/auth/jsonWebToken.hpp
@@ -89,9 +91,10 @@ set(WILL_BE_DELETED_HEADER_FILES
     include/uEventAnalysisToolBackend/database/aqms/origin.hpp
     include/uEventAnalysisToolBackend/database/aqms/streamIdentifier.hpp)
 set(LIBRARY_SRC
+    lib/auth/authenticator.cpp
+    lib/auth/authNZ.cpp
     lib/auth/database.cpp
     lib/auth/databaseOptions.cpp
-    #lib/auth/authenticator.cpp
     lib/auth/jsonWebToken.cpp
     lib/auth/openldap.cpp
     lib/auth/openldapOptions.cpp
@@ -139,7 +142,7 @@ target_link_libraries(libuEventAnalysisToolBackend
                               jwt-cpp::jwt-cpp
                               libpqxx::pqxx
                               spdlog::spdlog_header_only
-                              Boost::headers Boost::program_options
+                              Boost::headers Boost::json Boost::program_options
                               libsodium::libsodium
                               openldap::openldap
                               Threads::Threads)
@@ -197,7 +200,8 @@ target_include_directories(uEventAnalysisToolUserManager
                           )
 target_link_libraries(uEventAnalysisToolUserManager
                       PRIVATE uEventAnalysisToolBackend::libuEventAnalysisToolBackend
-                              Boost::headers Boost::program_options)
+                              spdlog::spdlog_header_only
+                              Boost::headers Boost::json Boost::program_options )
 
 
 
@@ -207,9 +211,13 @@ target_link_libraries(uEventAnalysisToolUserManager
 if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
    add_executable(unitTests
                   testing/auth/options.cpp
+                  testing/auth/jsonWebToken.cpp
+                  testing/auth/authNZ.cpp
                   testing/database/credentials.cpp
                   testing/database/aqms.cpp
    )
+   target_compile_definitions(unitTests
+                              PRIVATE TESTING_DATA_DIR="${CMAKE_SOURCE_DIR}/testing/data")
    set_target_properties(unitTests PROPERTIES
                          CXX_STANDARD 23
                          CXX_STANDARD_REQUIRED YES

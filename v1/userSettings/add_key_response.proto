@@ -2,7 +2,7 @@ edition = "2023";
 
 import "google/protobuf/duration.proto";
 
-package UEventAnalysisToolAPI.V1.Login;
+package UEventAnalysisToolAPI.V1.UserSettings;
 
 /**
  * Response to the user's request to add a public key.

@@ -1,0 +1,24 @@
+edition = "2023";
+
+package UEventAnalysisToolAPI.V1.UserSettings;
+
+import "uEventAnalysisToolAPI/v1/userSettings/change_password_request.proto";
+import "uEventAnalysisToolAPI/v1/userSettings/change_password_response.proto";
+import "uEventAnalysisToolAPI/v1/userSettings/list_keys_request.proto";
+import "uEventAnalysisToolAPI/v1/userSettings/list_keys_response.proto";
+import "uEventAnalysisToolAPI/v1/userSettings/revoke_key_request.proto";
+import "uEventAnalysisToolAPI/v1/userSettings/revoke_key_response.proto";
+
+/**
+ * Allows a user to manage their settings.
+ */
+service UserSettingsService {
+   // Allows user to list their keys (invalidates but does not delete the key).  
+   rpc ListKeys(ListKeysRequest) returns(ListKeysResponse) {};
+   // Allows user to delete a key.
+   rpc RevokeKey(RevokeKeyRequest) returns(RevokeKeyResponse) {};
+   // Allows a user to add a key.
+   rpc AddKey(AddKeyRequest) returns(AddKeyResponse) {};
+   // Allows a user to change their password.
+   rpc ChangePassword(ChangePasswordRequest) returns(ChangePasswordResponse) {};
+}

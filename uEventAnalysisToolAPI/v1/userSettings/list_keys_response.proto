@@ -1,7 +1,7 @@
 edition = "2023";
 import "google/protobuf/timestamp.proto";
 
-package UEventAnalysisToolAPI.V1.Login;
+package UEventAnalysisToolAPI.V1.UserSettings;
 
 /**
  * The user's available keys.

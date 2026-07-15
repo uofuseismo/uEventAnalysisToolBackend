@@ -1,6 +1,6 @@
 edition = "2023";
 
-package UEventAnalysisToolAPI.V1.Login;
+package UEventAnalysisToolAPI.V1.UserSettings;
 
 /**
  * Allows a user to revoke a key by name.  

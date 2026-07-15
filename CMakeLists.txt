@@ -113,6 +113,8 @@ set(WILL_BE_DELETED_SRC
     lib/database/aqms/event.cpp
     )
 set(USER_SETTINGS_PROTO_SRC
+    uEventAnalysisToolAPI/v1/userSettings/add_key_request.proto
+    uEventAnalysisToolAPI/v1/userSettings/add_key_response.proto
     uEventAnalysisToolAPI/v1/userSettings/change_password_request.proto
     uEventAnalysisToolAPI/v1/userSettings/change_password_response.proto
     uEventAnalysisToolAPI/v1/userSettings/list_keys_request.proto

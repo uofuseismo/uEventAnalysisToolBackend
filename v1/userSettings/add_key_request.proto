@@ -1,4 +1,5 @@
 edition = "2023";
+import "google/protobuf/duration.proto";
 
 package UEventAnalysisToolAPI.V1.UserSettings;
 
@@ -11,5 +12,5 @@ message AddKeyRequest {
    // The key algorithm.
    string algorithm = 2 [default = "ed25519"];
    // The key expires after this duration.  
-   google.protobuf.duration duration = 3;
+   google.protobuf.Duration expires_after = 3;
 }

@@ -1,0 +1,13 @@
+edition = "2023";
+
+package UEventAnalysisToolAPI.V1.Login;
+
+/**
+ * Allows a user to revoke a key by name.  
+ */
+message RevokeKeyRequest {
+   // A request identifier.
+   string identifier = 1 [default = ""];
+   // The name of the key to revoke.
+   string key_name = 2;
+}

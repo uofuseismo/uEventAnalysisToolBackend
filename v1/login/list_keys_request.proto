@@ -1,0 +1,12 @@
+edition = "2023";
+
+package UEventAnalysisToolAPI.V1.Login;
+
+/**
+ * Allows user to list their available keys.  
+ * Note, the user name will be lifted from the user's session token.
+ */
+message ListKeysRequest {
+   // A request identifier.
+   string identifier = 1 [default = ""];
+}

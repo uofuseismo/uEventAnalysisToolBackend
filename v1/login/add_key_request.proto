@@ -1,0 +1,15 @@
+edition = "2023";
+
+package UEventAnalysisToolAPI.V1.Login;
+
+/**
+ * Response to the user's request to add their PUBLIC key.  
+ */
+message AddKeyRequest {
+   // A request identifier.
+   string identifier = 1 [default = ""];
+   // The key algorithm.
+   string algorithm = 2 [default = "ed25519"];
+   // The key expires after this duration.  
+   google.protobuf.duration = 3;
+}

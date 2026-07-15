@@ -112,19 +112,16 @@ set(WILL_BE_DELETED_SRC
     lib/database/aqms/origin.cpp
     lib/database/aqms/event.cpp
     )
-set(LOGIN_PROTO_SRC
-    uEventAnalysisToolAPI/v1/login/mode.proto
-    uEventAnalysisToolAPI/v1/login/basic_request.proto
-    uEventAnalysisToolAPI/v1/login/basic_response.proto
-    uEventAnalysisToolAPI/v1/login/change_password_request.proto
-    uEventAnalysisToolAPI/v1/login/change_password_response.proto
-    uEventAnalysisToolAPI/v1/login/list_keys_request.proto
-    uEventAnalysisToolAPI/v1/login/list_keys_response.proto
-    uEventAnalysisToolAPI/v1/login/revoke_key_request.proto
-    uEventAnalysisToolAPI/v1/login/revoke_key_response.proto
-    uEventAnalysisToolAPI/v1/login/service.proto
+set(USER_SETTINGS_PROTO_SRC
+    uEventAnalysisToolAPI/v1/userSettings/change_password_request.proto
+    uEventAnalysisToolAPI/v1/userSettings/change_password_response.proto
+    uEventAnalysisToolAPI/v1/userSettings/list_keys_request.proto
+    uEventAnalysisToolAPI/v1/userSettings/list_keys_response.proto
+    uEventAnalysisToolAPI/v1/userSettings/revoke_key_request.proto
+    uEventAnalysisToolAPI/v1/userSettings/revoke_key_response.proto
+    uEventAnalysisToolAPI/v1/userSettings/service.proto
     )
-set(PROTO_SRC ${LOGIN_PROTO_SRC})
+set(PROTO_SRC ${USER_SETTINGS_PROTO_SRC})
 
 if (${BUILD_SHARED_LIBS})
    add_library(libuEventAnalysisToolBackend SHARED ${LIBRARY_SRC} ${WILL_BE_DELETED_SRC} ${PROTO_SRC})

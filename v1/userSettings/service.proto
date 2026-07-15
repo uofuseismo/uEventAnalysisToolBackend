@@ -2,6 +2,8 @@ edition = "2023";
 
 package UEventAnalysisToolAPI.V1.UserSettings;
 
+import "uEventAnalysisToolAPI/v1/userSettings/add_key_request.proto";
+import "uEventAnalysisToolAPI/v1/userSettings/add_key_response.proto";
 import "uEventAnalysisToolAPI/v1/userSettings/change_password_request.proto";
 import "uEventAnalysisToolAPI/v1/userSettings/change_password_response.proto";
 import "uEventAnalysisToolAPI/v1/userSettings/list_keys_request.proto";

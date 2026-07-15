@@ -13,13 +13,13 @@ message ListKeysResponse {
      // The algorithm.
      string algorithm = 2;
      // The time (UTC) when the key expires.
-     google.protobuf.Timestamp expires = 4;
+     google.protobuf.Timestamp expires = 3;
      // The time (UTC) when the key was created.
-     google.protobuf.Timestamp created = 5;
+     google.protobuf.Timestamp created = 4;
      // The last time (UTC) the key was used.
-     google.protobuf.Timestamp last_used = 6;
-     // Trud indicates the key is active.
-     bool active = 7;
+     google.protobuf.Timestamp last_used = 5;
+     // True indicates the key is active.
+     bool active = 6;
    }
    // The request identifier corresponding to the input request.
    string identifier = 1 [default = ""];

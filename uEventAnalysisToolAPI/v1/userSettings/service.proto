@@ -15,9 +15,9 @@ import "uEventAnalysisToolAPI/v1/userSettings/revoke_key_response.proto";
  * Allows a user to manage their settings.
  */
 service UserSettingsService {
-   // Allows user to list their keys (invalidates but does not delete the key).  
+   // Allows user to list their keys.  
    rpc ListKeys(ListKeysRequest) returns(ListKeysResponse) {};
-   // Allows user to delete a key.
+   // Allows user to delete a key (invalidates but does not delete the key).
    rpc RevokeKey(RevokeKeyRequest) returns(RevokeKeyResponse) {};
    // Allows a user to add a key.
    rpc AddKey(AddKeyRequest) returns(AddKeyResponse) {};

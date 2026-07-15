@@ -4,9 +4,9 @@ import "google/protobuf/duration.proto";
 package UEventAnalysisToolAPI.V1.UserSettings;
 
 /**
- * Response to the user's request to add their PUBLIC key.   Note, the user will be 
- * forced through basic authentication - i.e., they will have to provide their 
- * username and current password which will be put into the Authorization: Basic header.
+ * User request to add their PUBLIC key.   Note, the user will be forced through
+ * basic authentication - i.e., they will have to provide their user name and 
+ * current password which will be put into the Authorization: Basic header.
  */
 message AddKeyRequest {
    // A request identifier.

@@ -11,5 +11,5 @@ message AddKeyRequest {
    // The key algorithm.
    string algorithm = 2 [default = "ed25519"];
    // The key expires after this duration.  
-   google.protobuf.duration = 3;
+   google.protobuf.duration duration = 3;
 }

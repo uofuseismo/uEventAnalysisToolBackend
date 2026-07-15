@@ -11,6 +11,10 @@ message AddKeyRequest {
    string identifier = 1 [default = ""];
    // The key algorithm.
    string algorithm = 2 [default = "ed25519"];
+   // The (base64) public key.  The frontend can handle this if reading from a file.
+   string public_key = 3;
+   // The key name - e.g., jane-laptop.
+   string key_name = 4;
    // The key expires after this duration.  
-   google.protobuf.Duration expires_after = 3;
+   google.protobuf.Duration expires_after = 5;
 }

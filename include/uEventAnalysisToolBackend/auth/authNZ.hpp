@@ -11,6 +11,7 @@
 namespace UEventAnalysisToolBackend::Auth
 {
  class Database;
+ class JSONWebToken; 
 }
 
 namespace UEventAnalysisToolBackend::Auth
@@ -57,6 +58,13 @@ public:
     /// @throws std::invalid_argument if the token is empty.
     [[nodiscard]] std::pair<IAuthenticator::Result, std::optional<JSONWebToken::Claims>>
         authenticate(const std::string &jwt) const;
+    /// @brief Authenticates a basic credential.
+    /// @param[in] userNameAndPassword  userNameAndPassword.first is the user's
+    ///                                 name which cannot be blank, and 
+    ///                                 userNameAndPassword.second is the
+    ///                                 user's password.
+    [[nodiscard]] std::pair<IAuthenticator::Result, std::optional<JSONWebToken::Claims>>
+        authenticate(const std::pair<std::string, std::string> &userNameAndPassword) const;
 
     /// @result True if the identity may act at the required permission
     ///         level on the schema.  read_write satisfies read_only.

@@ -74,9 +74,10 @@ set(HEADER_FILES
     include/uEventAnalysisToolBackend/auth/authNZ.hpp
     include/uEventAnalysisToolBackend/auth/database.hpp
     include/uEventAnalysisToolBackend/auth/databaseOptions.hpp
+    include/uEventAnalysisToolBackend/auth/grpc.hpp
     include/uEventAnalysisToolBackend/auth/jsonWebToken.hpp
-    include/uEventAnalysisToolBackend/auth/openldap.hpp
-    include/uEventAnalysisToolBackend/auth/openldapOptions.hpp
+    #include/uEventAnalysisToolBackend/auth/openldap.hpp
+    #include/uEventAnalysisToolBackend/auth/openldapOptions.hpp
     include/uEventAnalysisToolBackend/database/credentials.hpp
     include/uEventAnalysisToolBackend/version.hpp
     )
@@ -95,9 +96,10 @@ set(LIBRARY_SRC
     lib/auth/authNZ.cpp
     lib/auth/database.cpp
     lib/auth/databaseOptions.cpp
+    lib/auth/grpc.cpp
     lib/auth/jsonWebToken.cpp
-    lib/auth/openldap.cpp
-    lib/auth/openldapOptions.cpp
+    #lib/auth/openldap.cpp
+    #lib/auth/openldapOptions.cpp
     lib/database/credentials.cpp
     lib/version.cpp
     )
@@ -152,7 +154,7 @@ target_link_libraries(libuEventAnalysisToolBackend
                               spdlog::spdlog_header_only
                               Boost::headers Boost::json Boost::program_options
                               libsodium::libsodium
-                              openldap::openldap
+                              #openldap::openldap
                               Threads::Threads)
 target_sources(libuEventAnalysisToolBackend
                PUBLIC FILE_SET
@@ -192,7 +194,7 @@ target_include_directories(uEventAnalysisToolBackend
                           )
 target_link_libraries(uEventAnalysisToolBackend
                       PRIVATE uEventAnalysisToolBackend::libuEventAnalysisToolBackend
-                              openldap::openldap
+                              #openldap::openldap
                               Boost::headers Boost::program_options)
 
 add_executable(uEventAnalysisToolUserManager
@@ -218,9 +220,10 @@ target_link_libraries(uEventAnalysisToolUserManager
 ##########################################################################################
 if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
    add_executable(unitTests
-                  testing/auth/options.cpp
+                  #testing/auth/openldap.cpp
                   testing/auth/jsonWebToken.cpp
                   testing/auth/authNZ.cpp
+                  testing/auth/grpc.cpp
                   testing/database/credentials.cpp
                   testing/database/aqms.cpp
    )
@@ -234,7 +237,7 @@ if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
                          PRIVATE
                             uEventAnalysisToolBackend::libuEventAnalysisToolBackend
                             spdlog::spdlog_header_only
-                            #gRPC::grpc gRPC::grpc++
+                            gRPC::grpc gRPC::grpc++
                             Threads::Threads
                             Catch2::Catch2 Catch2::Catch2WithMain)
    target_include_directories(unitTests

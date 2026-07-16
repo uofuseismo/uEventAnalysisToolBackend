@@ -99,6 +99,30 @@ AuthNZ::login(const std::pair<std::string, std::string> &userNameAndPassword)
     }
 }
 
+/// Authenticate with basic credentials
+std::pair<IAuthenticator::Result, std::optional<JSONWebToken::Claims>>
+AuthNZ::authenticate(
+    const std::pair<std::string, std::string> &userNameAndPassword) const
+{
+    const auto &user = userNameAndPassword.first;
+    if (user.empty()){throw std::invalid_argument("User is empty");}
+    auto result = pImpl->mDatabase->authenticateBasic(userNameAndPassword);
+    try
+    {
+        auto permissions = pImpl->mDatabase->getPermissions(user);
+        JSONWebToken::Claims claims{user, std::move(permissions)};
+        return {IAuthenticator::Result::Authenticated, std::move(claims)};
+    }
+    catch (const std::exception &e)
+    {
+        SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+                            "Failed to get permissions for {} because {}",
+                            user, std::string {e.what()});
+        return {IAuthenticator::Result::ServerError, std::nullopt};
+    }
+}
+
+
 /// The per-RPC bearer check
 std::pair<IAuthenticator::Result, std::optional<JSONWebToken::Claims>>
 AuthNZ::authenticate(const std::string &jwt) const

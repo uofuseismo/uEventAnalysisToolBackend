@@ -73,7 +73,7 @@ AuthNZ::AuthNZ(std::unique_ptr<Database> &&databaseAuthenticator,
 
 /// Login: basic authentication then a token with the user's permissions
 std::pair<IAuthenticator::Result, std::string>
-AuthNZ::login(const std::pair<std::string, std::string> &userNameAndPassword)
+AuthNZ::login(const std::pair<std::string, std::string> &userNameAndPassword) const
 {
     const auto &user = userNameAndPassword.first;
     if (user.empty()){throw std::invalid_argument("User is empty");}

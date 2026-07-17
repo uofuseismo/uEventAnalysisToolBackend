@@ -79,6 +79,8 @@ set(HEADER_FILES
     #include/uEventAnalysisToolBackend/auth/openldap.hpp
     #include/uEventAnalysisToolBackend/auth/openldapOptions.hpp
     include/uEventAnalysisToolBackend/database/credentials.hpp
+    include/uEventAnalysisToolBackend/grpc/grpcServerOptions.hpp
+    include/uEventAnalysisToolBackend/services/loginReactor.hpp
     include/uEventAnalysisToolBackend/version.hpp
     )
 set(WILL_BE_DELETED_HEADER_FILES
@@ -101,6 +103,8 @@ set(LIBRARY_SRC
     #lib/auth/openldap.cpp
     #lib/auth/openldapOptions.cpp
     lib/database/credentials.cpp
+    lib/grpc/grpcServerOptions.cpp
+    lib/services/loginReactor.cpp
     lib/version.cpp
     )
 set(WILL_BE_DELETED_SRC

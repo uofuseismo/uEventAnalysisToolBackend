@@ -23,7 +23,8 @@ using namespace UEventAnalysisToolBackend::Auth;
 
 std::expected<JSONWebToken::Claims, grpc::Status>
 UEventAnalysisToolBackend::Auth::authenticateBearer(
-    const AuthNZ &authNZ, const grpc::ServerContext &context,
+    const AuthNZ &authNZ,
+    const grpc::CallbackServerContext &context,
     spdlog::logger *logger)
 {
     const auto &metadata = context.client_metadata();
@@ -136,7 +137,8 @@ UEventAnalysisToolBackend::Auth::authenticateBearer(
 
 std::expected<JSONWebToken::Claims, grpc::Status>
 UEventAnalysisToolBackend::Auth::authenticateBasic(
-    const AuthNZ &authNZ, const grpc::ServerContext &context,
+    const AuthNZ &authNZ,
+    const grpc::CallbackServerContext &context,
     spdlog::logger *logger)
 {
     const auto &metadata = context.client_metadata();
@@ -269,6 +271,142 @@ UEventAnalysisToolBackend::Auth::authenticateBasic(
         return std::unexpected(std::move(status));
     }
 }
+
+std::expected<std::string, grpc::Status>
+UEventAnalysisToolBackend::Auth::loginBasic(
+    const AuthNZ &authNZ,
+    const grpc::CallbackServerContext &context,
+    spdlog::logger *logger)
+{
+    const auto &metadata = context.client_metadata();
+    auto idx = metadata.find("Basic");
+    if (idx == metadata.end()) 
+    {
+        if (logger)
+        {
+            SPDLOG_LOGGER_WARN(logger,
+                               "{} did not provide Basic creds",
+                               context.peer());
+        }
+        grpc::Status status{
+            grpc::StatusCode::UNAUTHENTICATED,
+            "Basic credential not set in header"};
+        return std::unexpected(std::move(status));
+    }
+    const std::string base64{idx->second.data(), idx->second.length()};
+    if (base64.empty())
+    {
+        if (logger)
+        {
+            SPDLOG_LOGGER_WARN(logger,
+                               "{} provided empty credentials",
+                               context.peer());
+        }
+        grpc::Status status{
+            grpc::StatusCode::UNAUTHENTICATED,
+            "Basic credential is empty"};
+        return std::unexpected(std::move(status));
+    }
+    // Parse the base64 to a user and password 
+    std::pair<std::string, std::string> userNameAndPassword;
+    try
+    {
+        userNameAndPassword = decodeBase64(base64);    
+    }
+    catch (const std::exception &e)
+    {
+        if (logger)
+        {
+            SPDLOG_LOGGER_WARN(logger,
+               "Rejecting {} - provided malformed credentials ({})",
+               context.peer(), e.what());
+        }
+        grpc::Status status{
+            grpc::StatusCode::INVALID_ARGUMENT,
+            "Basic credentials are malformed"};
+        return std::unexpected(std::move(status));
+    }
+    const auto &user = userNameAndPassword.first;
+    const auto &password = userNameAndPassword.second;
+    // Finally validate
+    try
+    {
+        auto [authResult, jwt] = authNZ.login(std::pair {user, password});
+        if (authResult == IAuthenticator::Result::Authenticated)
+        {
+            // Send the JWT back
+            if (!jwt.empty())
+            {
+                if (logger)
+                {
+                    SPDLOG_LOGGER_INFO(logger,
+                        "{} ({}) basic credentials authenticated",
+                        user, context.peer());
+                }
+                return jwt;
+            }
+            if (logger)
+            {
+                SPDLOG_LOGGER_ERROR(logger,
+                   "Null JWT returned for {}", context.peer());
+            }
+            grpc::Status status{
+                grpc::StatusCode::INTERNAL,
+                "Internal error - contact maintainer"};
+            return std::unexpected(std::move(status));
+        }
+        else if (authResult == IAuthenticator::Result::InvalidCredentials)
+        {
+            if (logger)
+            {
+                SPDLOG_LOGGER_WARN(logger,
+                    "{} provided invalid credentials",
+                    context.peer());
+            }
+            grpc::Status status{
+                grpc::StatusCode::UNAUTHENTICATED,
+                "The credentials are invalid"};
+            return std::unexpected(std::move(status));
+        }
+        else if (authResult == IAuthenticator::Result::ServerError)
+        {
+            if (logger)
+            {
+                SPDLOG_LOGGER_ERROR(logger,
+                   "Rejecting {} ({}) because of server error",
+                   user, context.peer());
+            }
+            grpc::Status status{
+                grpc::StatusCode::INTERNAL,
+                "Internal error - try again then contact maintainer"};
+            return std::unexpected(std::move(status));
+        }
+        if (logger)
+        {
+            SPDLOG_LOGGER_ERROR(logger,
+                "Unhandled logic when processing {} ({})",
+                user, context.peer());
+        }
+        grpc::Status status{
+            grpc::StatusCode::INTERNAL,
+            "Internal error - contact maintainer"};
+        return std::unexpected(std::move(status));
+    }
+    catch (const std::exception &e)
+    {
+        if (logger)
+        {
+            SPDLOG_LOGGER_ERROR(logger,
+                "Rejecting {} ({}) because server error {}",
+                user, context.peer(), e.what());
+        }
+        grpc::Status status{
+            grpc::StatusCode::INTERNAL,
+            "Internal error - contact maintainer"};
+        return std::unexpected(std::move(status));
+    }
+}
+
 
 std::pair<std::string, std::string>
 UEventAnalysisToolBackend::Auth::decodeBase64(const std::string &base64)

@@ -49,7 +49,7 @@ public:
     /// @result The authentication result and, on Authenticated, the token.
     /// @throws std::invalid_argument if the user is empty.
     [[nodiscard]] std::pair<IAuthenticator::Result, std::string>
-        login(const std::pair<std::string, std::string> &userNameAndPassword);
+        login(const std::pair<std::string, std::string> &userNameAndPassword) const;
 
     /// @brief Authenticates a bearer token; this is the per-RPC check.
     /// @param[in] jwt  The token from the request's authorization metadata.

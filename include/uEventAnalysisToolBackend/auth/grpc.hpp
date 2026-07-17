@@ -19,7 +19,12 @@ namespace UEventAnalysisToolBackend::Auth
 /// @result The claims or a ready-to-return UNAUTHENTICATED status. 
 /// @note This is likely to be used by almost every gRPC.
 [[nodiscard]] std::expected<JSONWebToken::Claims, grpc::Status>
-    authenticateBearer(const AuthNZ &authNZ, const grpc::ServerContext &context,
+    authenticateBearer(const AuthNZ &authNZ,
+                       const grpc::ServerContext &context,
+                       spdlog::logger *logger);
+[[nodiscard]] std::expected<JSONWebToken::Claims, grpc::Status>
+    authenticateBearer(const AuthNZ &authNZ, 
+                       const grpc::CallbackServerContext &context,
                        spdlog::logger *logger);
 /// @brief Authenticates a client with Basic (username and password)
 ///        credentials. 
@@ -31,8 +36,18 @@ namespace UEventAnalysisToolBackend::Auth
 /// @result The claims or a ready-to-return UNAUTHENTICATED status. 
 /// @note This is primarily used by the Login gRPC's.
 [[nodiscard]] std::expected<JSONWebToken::Claims, grpc::Status>
-    authenticateBasic(const AuthNZ &authNZ, const grpc::ServerContext &context,
+    authenticateBasic(const AuthNZ &authNZ,
+                      const grpc::ServerContext &context,
                       spdlog::logger *logger);
+[[nodiscard]] std::expected<JSONWebToken::Claims, grpc::Status>
+    authenticateBasic(const AuthNZ &authNZ, 
+                      const grpc::CallbackServerContext &context,
+                      spdlog::logger *logger);
+[[nodiscard]] std::expected<std::string, grpc::Status>
+    loginBasic(const AuthNZ &authNZ, 
+               const grpc::CallbackServerContext &context,
+               spdlog::logger *logger);
+
 /// @brief Utility function to decode a base64 username and password - e.g.,
 ///           echo -n sam-i-am:openup231#c | base64 
 ///        produces

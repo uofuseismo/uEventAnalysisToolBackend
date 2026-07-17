@@ -2,19 +2,25 @@ edition = "2023";
 
 package UEventAnalysisToolAPI.V1.Login;
 
-import "uEventAnalysisToolAPI/v1/login/mode.proto";
-
 /**
  * Defines a response to a basic login request.
  */
 message BasicResponse {
+   /// The claims this user has on each monitoring region.
+   message Claims {
+      /// The schema can be thought of as the monitoring region - e.g., utah, ynp, etc.
+      string schema = 1;
+      /// The permissions in this region - e.g., read_write, read_only
+      string permissions = 2;
+   }
    /// The identifier corresponding to the input request identifier.
    string identifier = 1;
    /// The JSON web token.  This token should be passed by the user in the subsequent
    /// requests in headers i.e., the Bearer <jwt> - HTTP Header field.
    string json_web_token = 2;
-   /// The realized application mode.
-   Mode mode = 3;
+   /// The claims each user has in each monitoring region.  The frontend can ignore
+   /// this but that will likely result in a lot of unauthorized errors.
+   repeated Claims claims = 3;
    /// Further details accompanying the login request.
    string details = 4;
 }

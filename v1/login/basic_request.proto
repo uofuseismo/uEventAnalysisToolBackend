@@ -2,16 +2,12 @@ edition = "2023";
 
 package UEventAnalysisToolAPI.V1.Login;
 
-import "uEventAnalysisToolAPI/v1/login/mode.proto";
-
 /**
  * Defines a basic login request.
  */
 message BasicRequest {
    // A request identifier.
    string identifier = 1 [default = ""];
-   // The desired application mode.
-   Mode mode = 2;
    // The frontend version.
-   string version = 3;
+   string version = 2;
 }

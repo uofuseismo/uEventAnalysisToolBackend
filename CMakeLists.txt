@@ -76,11 +76,13 @@ set(HEADER_FILES
     include/uEventAnalysisToolBackend/auth/databaseOptions.hpp
     include/uEventAnalysisToolBackend/auth/grpc.hpp
     include/uEventAnalysisToolBackend/auth/jsonWebToken.hpp
+    include/uEventAnalysisToolBackend/auth/jsonWebTokenOptions.hpp
     #include/uEventAnalysisToolBackend/auth/openldap.hpp
     #include/uEventAnalysisToolBackend/auth/openldapOptions.hpp
     include/uEventAnalysisToolBackend/database/credentials.hpp
     include/uEventAnalysisToolBackend/grpc/grpcServerOptions.hpp
-    include/uEventAnalysisToolBackend/services/loginReactor.hpp
+    include/uEventAnalysisToolBackend/grpc/server.hpp
+    include/uEventAnalysisToolBackend/services/loginService.hpp
     include/uEventAnalysisToolBackend/version.hpp
     )
 set(WILL_BE_DELETED_HEADER_FILES
@@ -100,11 +102,13 @@ set(LIBRARY_SRC
     lib/auth/databaseOptions.cpp
     lib/auth/grpc.cpp
     lib/auth/jsonWebToken.cpp
+    lib/auth/jsonWebTokenOptions.cpp
     #lib/auth/openldap.cpp
     #lib/auth/openldapOptions.cpp
     lib/database/credentials.cpp
     lib/grpc/grpcServerOptions.cpp
-    lib/services/loginReactor.cpp
+    lib/grpc/server.cpp
+    lib/services/loginService.cpp
     lib/version.cpp
     )
 set(WILL_BE_DELETED_SRC
@@ -121,7 +125,6 @@ set(WILL_BE_DELETED_SRC
 set(PROTO_SRC
     uEventAnalysisToolAPI/v1/login/basic_request.proto
     uEventAnalysisToolAPI/v1/login/basic_response.proto
-    uEventAnalysisToolAPI/v1/login/mode.proto
     uEventAnalysisToolAPI/v1/login/service.proto
     uEventAnalysisToolAPI/v1/userSettings/add_key_request.proto
     uEventAnalysisToolAPI/v1/userSettings/add_key_response.proto

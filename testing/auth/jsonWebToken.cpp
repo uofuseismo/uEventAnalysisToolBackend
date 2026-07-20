@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -8,6 +9,7 @@
 #include <vector>
 #include <catch2/catch_test_macros.hpp>
 #include "uEventAnalysisToolBackend/auth/jsonWebToken.hpp"
+#include "uEventAnalysisToolBackend/auth/jsonWebTokenOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/authenticator.hpp"
 
 using namespace UEventAnalysisToolBackend::Auth;
@@ -31,6 +33,23 @@ std::string loadKey(const std::string &fileName)
     return stream.str();
 }
 
+/// @brief Options for an ed25519-signing authority.
+JSONWebTokenOptions makeSignedOptions()
+{
+    JSONWebTokenOptions options;   // Algorithm defaults to EdDSA25519.
+    options.setKeyPair({loadKey("ed25519-public-key.pem"),
+                        loadKey("ed25519-private-key.pem")});
+    return options;
+}
+
+/// @brief Options for an unsigned authority.
+JSONWebTokenOptions makeUnsignedOptions()
+{
+    JSONWebTokenOptions options;
+    options.setAlgorithm(JSONWebTokenOptions::Algorithm::Unsigned);
+    return options;
+}
+
 /// @brief Corrupts the payload of a header.payload.signature token so the
 ///        signature no longer matches.
 std::string tamperWithPayload(const std::string &token)
@@ -45,11 +64,58 @@ std::string tamperWithPayload(const std::string &token)
 
 }
 
+TEST_CASE("UEventAnalysisToolBackend::Auth::JSONWebTokenOptions",
+          "JSONWebTokenOptions")
+{
+    SECTION("Defaults")
+    {
+        const JSONWebTokenOptions options;
+        REQUIRE(options.getAlgorithm()
+                == JSONWebTokenOptions::Algorithm::EdDSA25519);
+        REQUIRE(options.getTimeToLive() == std::chrono::minutes {15});
+        REQUIRE_FALSE(options.hasKeyPair());
+        REQUIRE_THROWS_AS(options.getKeyPair(), std::runtime_error);
+    }
+    SECTION("Time-to-live must be positive")
+    {
+        JSONWebTokenOptions options;
+        REQUIRE_THROWS_AS(options.setTimeToLive(std::chrono::seconds {0}),
+                          std::invalid_argument);
+        REQUIRE_THROWS_AS(options.setTimeToLive(std::chrono::seconds {-1}),
+                          std::invalid_argument);
+        options.setTimeToLive(std::chrono::hours {1});
+        REQUIRE(options.getTimeToLive() == std::chrono::hours {1});
+    }
+    SECTION("Algorithm round trips")
+    {
+        JSONWebTokenOptions options;
+        options.setAlgorithm(JSONWebTokenOptions::Algorithm::Unsigned);
+        REQUIRE(options.getAlgorithm()
+                == JSONWebTokenOptions::Algorithm::Unsigned);
+    }
+    SECTION("Empty keys throw; a valid pair round trips")
+    {
+        const auto publicKey = loadKey("ed25519-public-key.pem");
+        const auto privateKey = loadKey("ed25519-private-key.pem");
+        JSONWebTokenOptions options;
+        REQUIRE_THROWS_AS(options.setKeyPair({"", privateKey}),
+                          std::invalid_argument);
+        REQUIRE_THROWS_AS(options.setKeyPair({publicKey, ""}),
+                          std::invalid_argument);
+        REQUIRE_FALSE(options.hasKeyPair());
+
+        options.setKeyPair({publicKey, privateKey});
+        REQUIRE(options.hasKeyPair());
+        REQUIRE(options.getKeyPair().first == publicKey);
+        REQUIRE(options.getKeyPair().second == privateKey);
+    }
+}
+
 TEST_CASE("UEventAnalysisToolBackend::Auth::JSONWebToken", "JSONWebToken")
 {
     SECTION("Unsigned round trip")
     {
-        JSONWebToken authenticator{nullptr};
+        JSONWebToken authenticator{makeUnsignedOptions(), nullptr};
         REQUIRE_FALSE(authenticator.isSigned());
 
         const auto token = authenticator.createToken("sam-i-am");
@@ -62,9 +128,7 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::JSONWebToken", "JSONWebToken")
     }
     SECTION("Signed round trip")
     {
-        const auto publicKey = loadKey("ed25519-public-key.pem");
-        const auto privateKey = loadKey("ed25519-private-key.pem");
-        JSONWebToken authenticator{{publicKey, privateKey}, nullptr};
+        JSONWebToken authenticator{makeSignedOptions(), nullptr};
         REQUIRE(authenticator.isSigned());
 
         const auto token = authenticator.createToken("sam-i-am");
@@ -74,11 +138,16 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::JSONWebToken", "JSONWebToken")
         REQUIRE(authenticator.authenticateBearer(token)
                 == IAuthenticator::Result::Authenticated);
     }
+    SECTION("A signing algorithm requires a key pair")
+    {
+        // Default options select EdDSA25519 but carry no key pair.
+        const JSONWebTokenOptions options;
+        REQUIRE_THROWS_AS((JSONWebToken{options, nullptr}),
+                          std::invalid_argument);
+    }
     SECTION("Permissions ride in the signed token")
     {
-        const auto publicKey = loadKey("ed25519-public-key.pem");
-        const auto privateKey = loadKey("ed25519-private-key.pem");
-        const JSONWebToken authenticator{{publicKey, privateKey}, nullptr};
+        const JSONWebToken authenticator{makeSignedOptions(), nullptr};
 
         const std::vector<std::pair<std::string, std::string>> permissions
         {
@@ -103,9 +172,7 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::JSONWebToken", "JSONWebToken")
     }
     SECTION("Token without permissions verifies with empty permissions")
     {
-        const auto publicKey = loadKey("ed25519-public-key.pem");
-        const auto privateKey = loadKey("ed25519-private-key.pem");
-        const JSONWebToken authenticator{{publicKey, privateKey}, nullptr};
+        const JSONWebToken authenticator{makeSignedOptions(), nullptr};
 
         const auto token = authenticator.createToken("sam-i-am");
         const auto [result, claims] = authenticator.verify(token);
@@ -118,9 +185,7 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::JSONWebToken", "JSONWebToken")
     }
     SECTION("Tampered signed token is rejected")
     {
-        const auto publicKey = loadKey("ed25519-public-key.pem");
-        const auto privateKey = loadKey("ed25519-private-key.pem");
-        JSONWebToken authenticator{{publicKey, privateKey}, nullptr};
+        JSONWebToken authenticator{makeSignedOptions(), nullptr};
 
         const auto token = authenticator.createToken("sam-i-am");
         const auto tamperedToken = tamperWithPayload(token);
@@ -130,10 +195,8 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::JSONWebToken", "JSONWebToken")
     }
     SECTION("Algorithm mismatch is rejected")
     {
-        const auto publicKey = loadKey("ed25519-public-key.pem");
-        const auto privateKey = loadKey("ed25519-private-key.pem");
-        JSONWebToken signedAuthenticator{{publicKey, privateKey}, nullptr};
-        JSONWebToken unsignedAuthenticator{nullptr};
+        JSONWebToken signedAuthenticator{makeSignedOptions(), nullptr};
+        JSONWebToken unsignedAuthenticator{makeUnsignedOptions(), nullptr};
 
         // An unsigned (algorithm none) token must not pass the ed25519
         // verifier and vice versa.
@@ -147,7 +210,7 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::JSONWebToken", "JSONWebToken")
     }
     SECTION("Garbage tokens are rejected")
     {
-        JSONWebToken authenticator{nullptr};
+        JSONWebToken authenticator{makeUnsignedOptions(), nullptr};
         REQUIRE(authenticator.authenticateBearer("clearly-not-a-jwt")
                 == IAuthenticator::Result::InvalidCredentials);
         REQUIRE(authenticator.authenticateBearer("still.not.ajwt")
@@ -157,22 +220,13 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::JSONWebToken", "JSONWebToken")
     }
     SECTION("Empty user throws")
     {
-        const JSONWebToken authenticator{nullptr};
+        const JSONWebToken authenticator{makeUnsignedOptions(), nullptr};
         REQUIRE_THROWS_AS(authenticator.createToken(""),
-                          std::invalid_argument);
-    }
-    SECTION("Empty keys throw")
-    {
-        const auto publicKey = loadKey("ed25519-public-key.pem");
-        const auto privateKey = loadKey("ed25519-private-key.pem");
-        REQUIRE_THROWS_AS((JSONWebToken{{"", privateKey}, nullptr}),
-                          std::invalid_argument);
-        REQUIRE_THROWS_AS((JSONWebToken{{publicKey, ""}, nullptr}),
                           std::invalid_argument);
     }
     SECTION("Basic authentication is not implemented")
     {
-        JSONWebToken authenticator{nullptr};
+        JSONWebToken authenticator{makeUnsignedOptions(), nullptr};
         REQUIRE(authenticator.authenticateBasic({"user", "password"})
                 == IAuthenticator::Result::ServerError);
     }

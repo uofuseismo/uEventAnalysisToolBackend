@@ -10,14 +10,15 @@
 
 namespace UEventAnalysisToolBackend::Auth
 {
+ class JSONWebTokenOptions;
+}
+
+namespace UEventAnalysisToolBackend::Auth
+{
 /// @brief Handles the JSON webtoken utility as an authenticator.
 class JSONWebToken : public IAuthenticator
 {
 public:
-    enum class Algorithm
-    {
-        EdDSA25519  /*!< Edwards curve cryptography. */
-    };
     /// @brief The verified contents of a token.
     struct Claims
     {
@@ -28,18 +29,17 @@ public:
         std::vector<std::pair<std::string, std::string>> permissions;
     };
 public:
-    /// @brief Initialize for an unsigned algorithm.
-    explicit JSONWebToken(std::shared_ptr<spdlog::logger> logger);
-
-    /// @brief Initialize for a signed algorithm.
-    /// @note You can generate a private key with something like:
-    ///       openssl genpkey -algorithm ed25519 -out ed25519-private-key.pem
-    ///       and a corresonding public key with something like
-    ///       openssl pkey -in ed25519-private-key.pem -pubout -out ed25519-public-key.pem
-    ///       The keys are then secrets in Kubernetes.
-    JSONWebToken(const std::pair<std::string, std::string> &publicAndPrivateKey,
+    /// @brief Constructor.
+    /// @param[in] options  The token authority policy: signing algorithm,
+    ///                     signing key pair, and token time-to-live.  The
+    ///                     key pair is required unless the algorithm is
+    ///                     Unsigned.
+    /// @param[in] logger   The application logger.
+    /// @throws std::invalid_argument if a signing algorithm is selected but
+    ///         the options carry no key pair.
+    JSONWebToken(const JSONWebTokenOptions &options,
                  std::shared_ptr<spdlog::logger> logger);
- 
+
     /// @brief Perform the bearer authentication on this JWT.
     [[nodiscard]] IAuthenticator::Result authenticateBearer(const std::string &jwt) final;
 
@@ -50,7 +50,8 @@ public:
     [[nodiscard]] std::string createToken(const std::string &user) const;
     /// @brief Creates a token for the user with embedded permissions.
     /// @note The permissions ride in the signed payload; a client cannot
-    ///       alter them without invalidating the signature.
+    ///       alter them without invalidating the signature.  The token's
+    ///       lifetime is fixed by the authority's options.
     [[nodiscard]] std::string createToken(const std::string &user,
         const std::vector<std::pair<std::string, std::string>> &permissions) const;
 

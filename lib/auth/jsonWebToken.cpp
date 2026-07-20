@@ -16,6 +16,7 @@
 #include <jwt-cpp/jwt.h>
 #include <jwt-cpp/traits/boost-json/traits.h>
 #include "uEventAnalysisToolBackend/auth/jsonWebToken.hpp"
+#include "uEventAnalysisToolBackend/auth/jsonWebTokenOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/authenticator.hpp"
 
 using namespace UEventAnalysisToolBackend::Auth;
@@ -45,26 +46,21 @@ private:
         // NOLINTEND(misc-include-cleaner)
     }
 public:
-    JSONWebTokenImpl(std::shared_ptr<spdlog::logger> logger) :
+    JSONWebTokenImpl(const JSONWebTokenOptions &options,
+                     std::shared_ptr<spdlog::logger> logger) :
         mLogger(std::move(logger)),
-        mSignToken(false)
+        mExpirationDuration(options.getTimeToLive()),
+        mSignToken(options.getAlgorithm()
+                   != JSONWebTokenOptions::Algorithm::Unsigned)
     {
-        if (mLogger == nullptr){mLogger = makeConsoleLogger();}
-    }
-
-    JSONWebTokenImpl(const std::pair<std::string, std::string> &publicAndPrivateKey,
-                    std::shared_ptr<spdlog::logger> logger) :
-        mPublicAndPrivateKey(publicAndPrivateKey),
-        mLogger(std::move(logger)),
-        mSignToken(true)
-    {
-        if (mPublicAndPrivateKey.first.empty())
+        if (mSignToken)
         {
-            throw std::invalid_argument("Public key is empty");
-        }
-        if (mPublicAndPrivateKey.second.empty())
-        {
-            throw std::invalid_argument("Private key is empty");
+            if (!options.hasKeyPair())
+            {
+                throw std::invalid_argument(
+                    "A signing key pair is required for a signing algorithm");
+            }
+            mPublicAndPrivateKey = options.getKeyPair();
         }
         if (mLogger == nullptr){mLogger = makeConsoleLogger();}
     }
@@ -196,16 +192,9 @@ public:
 };
 
 /// Constructor
-JSONWebToken::JSONWebToken(std::shared_ptr<spdlog::logger> logger) :
-    pImpl(std::make_unique<JSONWebTokenImpl> (std::move(logger)))
-{
-}
-
-JSONWebToken::JSONWebToken(
-    const std::pair<std::string, std::string> &publicAndPrivateKey,
-    std::shared_ptr<spdlog::logger> logger) :
-    pImpl(std::make_unique<JSONWebTokenImpl>
-            (publicAndPrivateKey, std::move(logger)))
+JSONWebToken::JSONWebToken(const JSONWebTokenOptions &options,
+                          std::shared_ptr<spdlog::logger> logger) :
+    pImpl(std::make_unique<JSONWebTokenImpl> (options, std::move(logger)))
 {
 }
 

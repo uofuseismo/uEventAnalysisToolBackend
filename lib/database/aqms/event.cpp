@@ -1,7 +1,9 @@
 #include <algorithm>
 #include <cstdint>
 #include <memory>
+#include <set>
 #include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 #include "uEventAnalysisToolBackend/database/aqms/event.hpp"
@@ -116,12 +118,23 @@ bool Event::hasIdentifier() const noexcept
 /// Origins
 void Event::setOrigins(const std::vector<Origin> &origins)
 {
+    auto copy = origins;
+    setOrigins(std::move(copy));
+}
+
+void Event::setOrigins(std::vector<Origin> &&origins)
+{
     if (origins.empty())
     {
         throw std::invalid_argument("There must be at least one origin");
     }
+    std::set<int64_t> originIdentifiers;
     for (const auto &origin : origins)
     {
+        if (!origin.hasIdentifier())
+        { 
+            throw std::invalid_argument("An origin is missing its identifier");
+        }
         if (!origin.hasLatitude())
         {
             throw std::invalid_argument("An origin is missing its latitude");
@@ -138,6 +151,16 @@ void Event::setOrigins(const std::vector<Origin> &origins)
         {
             throw std::invalid_argument("An origin is missing its time");
         }
+        auto identifier = origin.getIdentifier();
+        if (originIdentifiers.contains(identifier))
+        {
+            throw std::invalid_argument("Duplicate origin identifier "
+                                      + std::to_string(identifier));
+        }
+        else
+        {
+            originIdentifiers.insert(identifier);
+        }
     }
     auto nPreferred = std::count_if(origins.begin(), origins.end(),
                                     [](const Origin &origin)
@@ -147,7 +170,11 @@ void Event::setOrigins(const std::vector<Origin> &origins)
     if (nPreferred != 1)
     {
         throw std::invalid_argument(
-            "There must be exactly one preferred origin");
+            "There must be exactly one preferred origin - received "
+           + std::to_string(nPreferred) 
+           + " preferred out of "
+           + std::to_string(origins.size())
+           + " origins provided");
     }
     pImpl->mOrigins = origins;
 }

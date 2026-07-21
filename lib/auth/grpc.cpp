@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <exception>
 #include <expected>
 #include <map>
@@ -28,7 +29,7 @@ UEventAnalysisToolBackend::Auth::authenticateBearer(
     spdlog::logger *logger)
 {
     const auto &metadata = context.client_metadata();
-    auto idx = metadata.find("Bearer");
+    auto idx = metadata.find("authorization");
     if (idx == metadata.end())
     {
         if (logger)
@@ -42,7 +43,24 @@ UEventAnalysisToolBackend::Auth::authenticateBearer(
             "Bearer credential not set in header"};
         return std::unexpected(std::move(status));
     }
-    const std::string jwt{idx->second.data(), idx->second.length()}; 
+    // Extract the actual jwt
+    const std::string authValue{idx->second.data(), idx->second.length()};
+    std::string jwt;
+    if (authValue.find("Bearer ") == 0 ||
+        authValue.find("BEARER ") == 0 ||
+        authValue.find("bearer ") == 0)
+    {
+        constexpr size_t keyLength{6};
+        jwt = authValue.substr(keyLength, std::string::npos);
+    }
+    else if (authValue.find("Bearer") == 0 ||
+             authValue.find("BEARER") == 0 ||
+             authValue.find("bearer") == 0)
+    {
+        constexpr size_t keyLength{5};
+        jwt = authValue.substr(keyLength, std::string::npos);
+    }
+    // Check that we actually got something
     if (jwt.empty())
     {
         if (logger)
@@ -53,7 +71,7 @@ UEventAnalysisToolBackend::Auth::authenticateBearer(
         }
         grpc::Status status{
             grpc::StatusCode::UNAUTHENTICATED,
-            "Bearer credential is empty"};
+            "Bearer credential is empty - need to provide Authorization: Bearer VALUE header"};
         return std::unexpected(std::move(status));
     }
     // Throws - this is a server error and should return INTERNAL
@@ -142,7 +160,7 @@ UEventAnalysisToolBackend::Auth::authenticateBasic(
     spdlog::logger *logger)
 {
     const auto &metadata = context.client_metadata();
-    auto idx = metadata.find("Basic");
+    auto idx = metadata.find("authorization");
     if (idx == metadata.end()) 
     {
         if (logger)
@@ -153,23 +171,26 @@ UEventAnalysisToolBackend::Auth::authenticateBasic(
         }
         grpc::Status status{
             grpc::StatusCode::UNAUTHENTICATED,
-            "Basic credential not set in header"};
+            "Basic credential not set in header - need to provide Authorization: Basic VALUE header"};
         return std::unexpected(std::move(status));
     }
-    const std::string base64{idx->second.data(), idx->second.length()};
-    if (base64.empty())
-    {
-        if (logger)
-        {
-            SPDLOG_LOGGER_WARN(logger,
-                               "{} provided empty credentials",
-                               context.peer());
-        }
-        grpc::Status status{
-            grpc::StatusCode::UNAUTHENTICATED,
-            "Basic credential is empty"};
-        return std::unexpected(std::move(status));
+    // Extract the actual base64 value 
+    const std::string authValue{idx->second.data(), idx->second.length()};
+    std::string base64;
+    if (authValue.find("Basic ") == 0 ||
+        authValue.find("BASIC ") == 0 ||
+        authValue.find("basic ") == 0)
+    {   
+        constexpr size_t keyLength{6};
+        base64 = authValue.substr(keyLength, std::string::npos);
     }
+    else if (authValue.find("Basic") == 0 ||
+             authValue.find("BASIC") == 0 ||  
+             authValue.find("basic") == 0)
+    {   
+        constexpr size_t keyLength{5};
+        base64 = authValue.substr(keyLength, std::string::npos);
+    }   
     // Parse the base64 to a user and password 
     std::pair<std::string, std::string> userNameAndPassword;
     try
@@ -279,21 +300,38 @@ UEventAnalysisToolBackend::Auth::loginBasic(
     spdlog::logger *logger)
 {
     const auto &metadata = context.client_metadata();
-    auto idx = metadata.find("Basic");
+    auto idx = metadata.find("authorization");
     if (idx == metadata.end()) 
     {
         if (logger)
         {
             SPDLOG_LOGGER_WARN(logger,
-                               "{} did not provide Basic creds",
+                               "{} did not provide authentication header",
                                context.peer());
         }
         grpc::Status status{
             grpc::StatusCode::UNAUTHENTICATED,
-            "Basic credential not set in header"};
+            "authentication field not set in header"};
         return std::unexpected(std::move(status));
     }
-    const std::string base64{idx->second.data(), idx->second.length()};
+    // Extract the actual base64  value
+    const std::string authValue{idx->second.data(), idx->second.length()};
+    std::string base64;
+    if (authValue.find("Basic ") == 0 ||
+        authValue.find("BASIC ") == 0 ||
+        authValue.find("basic ") == 0)
+    {
+        constexpr size_t keyLength{6};
+        base64 = authValue.substr(keyLength, std::string::npos);
+    }
+    else if (authValue.find("Basic") == 0 ||
+             authValue.find("BASIC") == 0 || 
+             authValue.find("basic") == 0)
+    {
+        constexpr size_t keyLength{5};
+        base64 = authValue.substr(keyLength, std::string::npos);
+    }
+    // This is effectivel the "else"
     if (base64.empty())
     {
         if (logger)
@@ -304,7 +342,7 @@ UEventAnalysisToolBackend::Auth::loginBasic(
         }
         grpc::Status status{
             grpc::StatusCode::UNAUTHENTICATED,
-            "Basic credential is empty"};
+            "Basic credential is empty; need Authorizaiton: Basic VALUE header"};
         return std::unexpected(std::move(status));
     }
     // Parse the base64 to a user and password 

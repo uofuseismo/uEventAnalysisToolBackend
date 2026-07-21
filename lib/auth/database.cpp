@@ -37,12 +37,14 @@ public:
         if (mLogger == nullptr)
         {
             // NOLINTBEGIN(misc-include-cleaner)
-            auto classId
-                = std::to_string (reinterpret_cast<std::uintptr_t> (this));
-            mLogger = spdlog::stdout_color_mt("AuthDatabaseConsole-" + classId);
+            constexpr const char *loggerName{"AuthDatabaseConsole"};
+            mLogger = spdlog::get(loggerName);
+            if (mLogger == nullptr)
+            {
+                mLogger = spdlog::stdout_color_mt(loggerName);
+            }
             // NOLINTEND(misc-include-cleaner)
         }
-         
         connect();
         mInitialized = isConnected();
     }

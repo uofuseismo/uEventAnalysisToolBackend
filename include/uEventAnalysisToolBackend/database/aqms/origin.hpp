@@ -20,6 +20,7 @@ public:
     /// @brief The geographic type.
     enum class GeographicType
     {
+        Unknown,    /*!< The geographic type is unknown. */
         Local,      /*<! This is an event within the authoratative boundary. */ 
         Regional,   /*!< This is near'ish the authoratative boundary but not in.  
                          Think like up to 10 epicentral degrees. */
@@ -90,6 +91,8 @@ public:
  
     /// @brief Sets the arrivals.
     void setArrivals(const std::vector<Arrival> &arrivals);
+    /// @brief Sets the arrivals.
+    void setArrivals(std::vector<Arrival> &&arrivals);
     /// @result The arrivals that define this origin.
     [[nodiscard]] std::vector<Arrival> getArrivals() const noexcept;
 

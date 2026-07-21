@@ -48,6 +48,7 @@ public:
     /// @note All origins must have required fields (e.g., latitude, longitude,
     ///       depth, time) and one and only one origin must be the preferred origin.
     void setOrigins(const std::vector<Origin> &origins);
+    void setOrigins(std::vector<Origin> &&origins);
     /// @result True indicates that the origins were set.
     [[nodiscard]] bool hasOrigins() const noexcept; 
     /// @brief The preferred origin.

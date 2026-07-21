@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -8,6 +9,7 @@
 #include <vector>
 #include "uEventAnalysisToolBackend/database/aqms/origin.hpp"
 #include "uEventAnalysisToolBackend/database/aqms/arrival.hpp"
+#include "uEventAnalysisToolBackend/database/aqms/streamIdentifier.hpp"
 
 using namespace UEventAnalysisToolBackend::Database::AQMS;
 
@@ -184,6 +186,98 @@ bool Origin::hasTime() const noexcept
 /// Arrivals
 void Origin::setArrivals(const std::vector<Arrival> &arrivals)
 {
+    auto copy = arrivals;
+    setArrivals(std::move(copy));
+}
+
+void Origin::setArrivals(std::vector<Arrival> &&arrivals)
+{
+    if (arrivals.empty())
+    {
+        throw std::invalid_argument("No arrivals");
+    }
+    for (const auto &arrival : arrivals)
+    {
+        if (!arrival.hasTime())
+        {
+            throw std::invalid_argument("Arrival time not set");
+        }
+        if (!arrival.hasStreamIdentifier())
+        {
+            throw std::invalid_argument("Arrival stream not set");
+        }
+        if (!arrival.hasPhase())
+        {
+            throw std::invalid_argument("Arrival phase not set");
+        }
+        if (!arrival.hasReviewStatus())
+        {
+            throw std::invalid_argument("Review status not set");
+        }
+    }
+    std::sort(arrivals.begin(), arrivals.end(), 
+              [](const auto &lhs, const auto &rhs)
+              {
+                  return lhs.getTime() < rhs.getTime();
+              });
+    auto nArrivals = static_cast<int> (arrivals.size());
+    for (int i = 0; i < nArrivals; ++i)
+    {
+        const auto sid1 = arrivals[i].getStreamIdentifier();
+        auto iPhase = arrivals[i].getPhase();
+        for (int j = i + 1; j < nArrivals; ++j)
+        {
+            auto sid2 = arrivals[j].getStreamIdentifier();
+            if (sid1.getNetwork() == sid2.getNetwork() &&
+                sid1.getStation() == sid2.getStation() &&
+                sid1.getChannel() == sid2.getChannel() &&
+                sid1.getLocationCode() == sid2.getLocationCode())
+            {
+                auto jPhase = arrivals[j].getPhase();
+                if (iPhase == jPhase)
+                {
+                    std::string sPhase1 = (iPhase == Arrival::Phase::P) ? "P" : "S"; 
+                    auto nscl1 = sid1.getNetwork()
+                               + "."
+                               + sid1.getStation()
+                               + "."
+                               + sid1.getChannel()
+                               + "."
+                               + sid1.getLocationCode()
+                               + " " 
+                               + sPhase1;
+                    std::string sPhase2 = (jPhase == Arrival::Phase::P) ? "P" : "S";
+                    auto nscl2 = sid2.getNetwork()
+                               + "."
+                               + sid2.getStation()
+                               + "."
+                               + sid2.getChannel()
+                               + "."
+                               + sid2.getLocationCode()
+                               + " " 
+                               + sPhase2;
+                    throw std::invalid_argument("Duplicate arrival "
+                        + nscl1 + " " + nscl2);
+                }
+                if (iPhase == Arrival::Phase::P &&
+                    jPhase == Arrival::Phase::S)
+                {
+                    if (arrivals[i].getTime() > arrivals[j].getTime())
+                    {
+                        throw std::invalid_argument("P after S");
+                    }
+                }
+                if (iPhase == Arrival::Phase::S &&
+                    jPhase == Arrival::Phase::P)
+                {
+                    if (arrivals[i].getTime() < arrivals[j].getTime())
+                    {
+                        throw std::invalid_argument("S before P");
+                    }
+                } 
+            }
+        }
+    }
     pImpl->mArrivals = arrivals;
 }
 

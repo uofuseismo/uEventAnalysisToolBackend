@@ -139,6 +139,12 @@ bool Arrival::hasReviewStatus() const noexcept
 /// Stream identifier
 void Arrival::setStreamIdentifier(const StreamIdentifier &identifier)
 {
+    auto copy = identifier;
+    setStreamIdentifier(std::move(copy));
+}
+
+void Arrival::setStreamIdentifier(StreamIdentifier &&identifier)
+{
     if (!identifier.hasNetwork())
     {
         throw std::invalid_argument("Network not set on stream identifier");

@@ -75,6 +75,7 @@ public:
     /// @throws std::invalid_argument if the network, station, channel,
     ///         or location code was not set.
     void setStreamIdentifier(const StreamIdentifier &identifier);
+    void setStreamIdentifier(StreamIdentifier &&identifier);
     /// @result Gets the stream identifier.
     /// @throws std::runtime_error if \c hasStreamIdentifier() is false.
     [[nodiscard]] StreamIdentifier getStreamIdentifier() const;

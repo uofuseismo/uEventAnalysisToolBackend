@@ -3,10 +3,18 @@
 #include <uEventAnalysisToolBackend/database/aqms/magnitude.hpp>
 #include <memory>
 namespace UEventAnalysisToolBackend::Database::AQMS
+{   
+ class StationLocalMagnitude;
+}
+namespace UEventAnalysisToolBackend::Database::AQMS
 {
+/// @class LocalMagnitude localMagnitude.hpp
 /// @brief Defines a local (Richter) magnitude.
+/// @copyright Ben Baker (University of Utah) distributed under the
+///            MIT NO AI License.
 class LocalMagnitude final : public IMagnitude
 {
+    // TODO Make an iterator based on std::vector so i can iterate through station mags
 public:
     /// @brief Constructor.
     LocalMagnitude();
@@ -20,6 +28,14 @@ public:
 
     /// @result A deep copy of this local magnitude.
     [[nodiscard]] std::unique_ptr<IMagnitude> clone() const final;
+
+    /// @brief Sets the station magnitudes.
+    /// @note The actual local magnitude ends up being something akin
+    ///       to an average of these values.
+    void setStationMagnitudes(const std::vector<StationLocalMagnitude> &stationMagnitudes);
+    void setStationMagnitudes(std::vector<StationLocalMagnitude> &&stationMagnitudes);
+    /// @result The station magnitudes.
+    [[nodiscard]] std::vector<StationLocalMagnitude> getStationMagnitudes() const;
 
     /// @brief Destructor.
     virtual ~LocalMagnitude();

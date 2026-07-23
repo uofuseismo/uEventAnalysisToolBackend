@@ -94,6 +94,9 @@ set(WILL_BE_DELETED_HEADER_FILES
     include/uEventAnalysisToolBackend/database/aqms/localMagnitude.hpp
     include/uEventAnalysisToolBackend/database/aqms/magnitude.hpp
     include/uEventAnalysisToolBackend/database/aqms/origin.hpp
+    include/uEventAnalysisToolBackend/database/aqms/peakToPeakAmplitude.hpp
+    include/uEventAnalysisToolBackend/database/aqms/stationLocalMagnitude.hpp
+    include/uEventAnalysisToolBackend/database/aqms/stationDurationMagnitude.hpp
     include/uEventAnalysisToolBackend/database/aqms/streamIdentifier.hpp)
 set(LIBRARY_SRC
     lib/auth/authenticator.cpp
@@ -121,6 +124,9 @@ set(WILL_BE_DELETED_SRC
     lib/database/aqms/humanMagnitude.cpp
     lib/database/aqms/origin.cpp
     lib/database/aqms/event.cpp
+    lib/database/aqms/peakToPeakAmplitude.cpp
+    lib/database/aqms/stationLocalMagnitude.cpp
+    lib/database/aqms/stationDurationMagnitude.cpp
     )
 set(PROTO_SRC
     uEventAnalysisToolAPI/v1/login/basic_request.proto

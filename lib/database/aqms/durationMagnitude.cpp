@@ -1,12 +1,16 @@
 #include <memory>
 #include <utility>
+#include <vector>
 #include "uEventAnalysisToolBackend/database/aqms/durationMagnitude.hpp"
 #include "uEventAnalysisToolBackend/database/aqms/magnitude.hpp"
+#include "uEventAnalysisToolBackend/database/aqms/stationDurationMagnitude.hpp"
 
 using namespace UEventAnalysisToolBackend::Database::AQMS;
 
 class DurationMagnitude::DurationMagnitudeImpl
 {
+public:
+    std::vector<StationDurationMagnitude> mStationMagnitudes;
 };
 
 /// Constructor
@@ -62,4 +66,23 @@ IMagnitude::Type DurationMagnitude::getType() const noexcept
 std::unique_ptr<IMagnitude> DurationMagnitude::clone() const
 {
     return std::make_unique<DurationMagnitude> (*this);
+}
+
+/// Station magnitudes
+void DurationMagnitude::setStationMagnitudes(
+    const std::vector<StationDurationMagnitude> &stationMagnitudes)
+{
+    pImpl->mStationMagnitudes = stationMagnitudes;
+}
+
+void DurationMagnitude::setStationMagnitudes(
+    std::vector<StationDurationMagnitude> &&stationMagnitudes)
+{
+    pImpl->mStationMagnitudes = std::move(stationMagnitudes);
+}
+
+std::vector<StationDurationMagnitude>
+DurationMagnitude::getStationMagnitudes() const
+{
+    return pImpl->mStationMagnitudes;
 }

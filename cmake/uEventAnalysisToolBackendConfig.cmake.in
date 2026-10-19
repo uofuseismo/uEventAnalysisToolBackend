@@ -1,0 +1,20 @@
+#.rst
+# FinduEventAnalysisToolBackend
+# ---------------------
+#
+# Finds the UUSS Event Analysis Tool Backend library.
+#
+# Imported Targets
+# ^^^^^^^^^^^^^^^^
+#
+# ``uEventAnalysisToolBackend_FOUND``
+#   True indicates uEventAnalysisToolBackend was found.
+# ``uEventAnalysisToolBackend::uEventAnalysisToolBackend``
+#   The filter picker library, if found.
+include(CMakeFindDependencyMacro)
+
+#find_dependency(TBB)
+
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/@PROJECT_NAME@Targets.cmake")

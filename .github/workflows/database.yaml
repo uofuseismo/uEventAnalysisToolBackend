@@ -1,0 +1,83 @@
+name: Database
+run-name: Database tests for ${{ github.ref_name }}
+
+# Only the SQL and its scripts can break these tests, so nothing else
+# triggers them.  This job needs no build: a regression in the schema
+# fails here in a minute instead of after a C++ build.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/database/**'
+      - '.github/workflows/database.yaml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/database/**'
+      - '.github/workflows/database.yaml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ['18']
+    name: PostgreSQL ${{ matrix.postgres }}
+
+    # A throwaway server per run.  The official image authenticates TCP
+    # connections with scram-sha-256, which is what test.sh's test roles
+    # need: they log in with the passwords create.sh just gave them, so
+    # the stdin password plumbing is exercised rather than bypassed.
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          # Not a secret: this server lives for one job and is
+          # reachable only from the runner.
+          POSTGRES_PASSWORD: postgres
+        # Not 5432 on the host: the runner image ships a PostgreSQL of its
+        # own that may already hold it, and then psql would quietly talk to
+        # the wrong server.
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      # psql runs on the runner and reads the scripts from the workspace;
+      # \i is resolved client-side, so no staging of files is needed.
+      - name: Ensure a psql client
+        run: |
+          if ! command -v psql >/dev/null; then
+            sudo apt-get update -y
+            sudo apt-get install -y --no-install-recommends postgresql-client
+          fi
+
+      - name: Show client and server versions
+        env:
+          PGHOST: localhost
+          PGPORT: '55432'
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          psql --version
+          psql --no-psqlrc --tuples-only --dbname=postgres -c 'SELECT version();'
+
+      - name: Run database tests
+        env:
+          PGHOST: localhost
+          PGPORT: '55432'
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: scripts/database/test.sh

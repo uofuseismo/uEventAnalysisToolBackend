@@ -1,8 +1,16 @@
+#include <algorithm>
+#include <cctype>
 #include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <stdexcept>
+#include <sstream>
 #include <string>
 #include <utility>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/ptree_fwd.hpp>
+#include <boost/property_tree/ini_parser.hpp>
 #include "uEventAnalysisToolBackend/auth/jsonWebTokenOptions.hpp"
 
 using namespace UEventAnalysisToolBackend::Auth;
@@ -115,14 +123,32 @@ bool JSONWebTokenOptions::hasKeyPair() const noexcept
 ///--------------------------------------------------------------------------///
 ///                         Build from ini file                              ///
 ///--------------------------------------------------------------------------///
-#include <algorithm>
-#include <cctype>
-#include <filesystem>
-#include <fstream>
-#include <sstream>
-#include <boost/property_tree/ptree.hpp>
-#include <boost/property_tree/ptree_fwd.hpp>
-#include <boost/property_tree/ini_parser.hpp>
+namespace
+{
+
+[[nodiscard]] std::string trim(const std::string &text)
+{       
+    const auto first = text.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos){return std::string {};}
+    const auto last = text.find_last_not_of(" \t\r\n");
+    return text.substr(first, last - first + 1);
+}   
+
+/// NOLINTBEGIN(bugprone-easily-swappable-parameters)
+void throwIfKeysAreIdentical(const std::string &publicKey,
+                             const std::string &privateKey,
+                             const std::string &source)
+/// NOLINTEND(bugprone-easily-swappable-parameters)
+{
+    if (::trim(publicKey) == ::trim(privateKey))
+    {
+        throw std::invalid_argument(
+            "The public and private key in " + source + " are the same "
+            "value - one of them has been pasted over the other.  The "
+            "public key cannot sign and the private key cannot be "
+            "published; they are different keys.");
+    }
+}
 
 [[nodiscard]] std::string
 static loadStringFromFile(const std::filesystem::path &path)
@@ -139,6 +165,8 @@ static loadStringFromFile(const std::filesystem::path &path)
     file.close(); 
     result = sstr.str();
     return result;
+}
+
 }
 
 JSONWebTokenOptions JSONWebTokenOptions::fromInitializationFile(
@@ -190,21 +218,54 @@ JSONWebTokenOptions JSONWebTokenOptions::fromInitializationFile(
 
     if (result.getAlgorithm() != JSONWebTokenOptions::Algorithm::Unsigned)
     {
-        auto publicKeyFile
-           = propertyTree.get<std::string> (section + "jwtPublicKeyFile");
-        auto privateKeyFile
-           = propertyTree.get<std::string> (section + "jwtPrivateKeyFile");
-        if (!std::filesystem::exists(publicKeyFile))
+        auto publicKey
+           = propertyTree.get_optional<std::string> (section + "jwtPublicKey");
+        auto privateKey
+           = propertyTree.get_optional<std::string> (section + "jwtPrivateKey");
+        if (publicKey && privateKey)
         {
-            throw std::invalid_argument("Public key file does not exist");
+            if (publicKey->empty())
+            {
+                throw std::invalid_argument("jwtPublicKey is empty");
+            }
+            if (privateKey->empty())
+            {
+                throw std::invalid_argument("jwtPrivateKey is empty");
+            }
+            ::throwIfKeysAreIdentical(*publicKey, *privateKey,
+                                      "jwtPublicKey and jwtPrivateKey");
+            auto publicKeyText
+                 = "-----BEGIN PUBLIC KEY-----\n"
+                 + *publicKey + "\n"
+                 + "-----END PUBLIC KEY-----";
+            auto privateKeyText
+                 = "\n-----BEGIN PRIVATE KEY-----\n"
+                 + *privateKey + "\n"
+                 + "-----END PRIVATE KEY-----";
+            result.setKeyPair(std::pair {publicKeyText, privateKeyText});
         }
-        if (!std::filesystem::exists(privateKeyFile))
+        else
         {
-            throw std::invalid_argument("Private key file does not exist"); 
-        }
-        auto publicKeyText = ::loadStringFromFile(publicKeyFile);
-        auto privateKeyText = ::loadStringFromFile(privateKeyFile); 
-        result.setKeyPair(std::pair {publicKeyText, privateKeyText});
+            auto publicKeyFile
+               = propertyTree.get<std::string> (section + "jwtPublicKeyFile");
+            auto privateKeyFile
+               = propertyTree.get<std::string> (section + "jwtPrivateKeyFile");
+            if (!std::filesystem::exists(publicKeyFile))
+            {
+                throw std::invalid_argument("Public key file does not exist");
+            }
+            if (!std::filesystem::exists(privateKeyFile))
+            {
+                throw std::invalid_argument("Private key file does not exist");
+            }
+            auto publicKeyText = ::loadStringFromFile(publicKeyFile);
+            auto privateKeyText = ::loadStringFromFile(privateKeyFile); 
+            ::throwIfKeysAreIdentical(publicKeyText, privateKeyText,
+                                      "jwtPublicKeyFile (" + publicKeyFile
+                                    + ") and jwtPrivateKeyFile ("
+                                    + privateKeyFile + ")");
+            result.setKeyPair(std::pair {publicKeyText, privateKeyText});
+       }
     }
     return result;
 }

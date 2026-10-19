@@ -16,6 +16,17 @@ namespace UEventAnalysisToolBackend::Auth
 
 namespace UEventAnalysisToolBackend::Auth
 {
+
+/*
+struct Requirement
+{
+    /// The permissions level the route requires.  
+    IAuthenticator::Permissions permissions
+    /// @brief Demands the caller's password even if they hold a valid token.
+    bool requirePassword{false};
+};
+*/
+
 /// @class AuthNZ authNZ.hpp
 /// @brief Authentication (who are you?) and authorization (what may you
 ///        do?) rolled into the one-stop utility the gRPC interceptor
@@ -65,6 +76,15 @@ public:
     ///                                 user's password.
     [[nodiscard]] std::pair<IAuthenticator::Result, std::optional<JSONWebToken::Claims>>
         authenticate(const std::pair<std::string, std::string> &userNameAndPassword) const;
+
+    /// @brief The entire per-request check in one call:
+    ///          (1) Read the auth header.
+    ///          (2) Authenticate by the named scheme.
+    ///          (3) Determine if the caller meets the required clearance.
+    /// @param[in] authorizationHeader  The raw Authorization header.  An
+    ///                                 empty string means it was absent.
+    /// @param[in] requirement          The route demands.
+    //[[nodiscard]] 
 
     /// @result True if the identity may act at the required permission
     ///         level on the schema.  read_write satisfies read_only.

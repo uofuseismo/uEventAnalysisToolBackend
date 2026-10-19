@@ -123,18 +123,21 @@ set(WILL_BE_DELETED_SRC
     lib/database/aqms/stationDurationMagnitude.cpp
     )
 set(PROTO_SRC
+    uEventAnalysisToolAPI/admin/v1/service.proto
+    uEventAnalysisToolAPI/auth/v1/change_password_request.proto
+    uEventAnalysisToolAPI/auth/v1/change_password_response.proto
     uEventAnalysisToolAPI/auth/v1/login_with_password_request.proto
     uEventAnalysisToolAPI/auth/v1/login_with_password_response.proto
     uEventAnalysisToolAPI/auth/v1/service.proto
-    uEventAnalysisToolAPI/v1/userSettings/add_key_request.proto
-    uEventAnalysisToolAPI/v1/userSettings/add_key_response.proto
-    uEventAnalysisToolAPI/v1/userSettings/change_password_request.proto
-    uEventAnalysisToolAPI/v1/userSettings/change_password_response.proto
-    uEventAnalysisToolAPI/v1/userSettings/list_keys_request.proto
-    uEventAnalysisToolAPI/v1/userSettings/list_keys_response.proto
-    uEventAnalysisToolAPI/v1/userSettings/revoke_key_request.proto
-    uEventAnalysisToolAPI/v1/userSettings/revoke_key_response.proto
-    uEventAnalysisToolAPI/v1/userSettings/service.proto
+    #uEventAnalysisToolAPI/v1/userSettings/add_key_request.proto
+    #uEventAnalysisToolAPI/v1/userSettings/add_key_response.proto
+    #uEventAnalysisToolAPI/v1/userSettings/change_password_request.proto
+    #uEventAnalysisToolAPI/v1/userSettings/change_password_response.proto
+    #uEventAnalysisToolAPI/v1/userSettings/list_keys_request.proto
+    #uEventAnalysisToolAPI/v1/userSettings/list_keys_response.proto
+    #uEventAnalysisToolAPI/v1/userSettings/revoke_key_request.proto
+    #uEventAnalysisToolAPI/v1/userSettings/revoke_key_response.proto
+    #uEventAnalysisToolAPI/v1/userSettings/service.proto
     )
 
 if (${BUILD_SHARED_LIBS})

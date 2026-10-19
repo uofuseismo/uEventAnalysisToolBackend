@@ -25,15 +25,15 @@ class uWaveServer(ConanFile):
 
    def requirements(self):
        # dependencies
-       self.requires("grpc/1.82.0")
+       self.requires("grpc/1.84.0")
        self.requires("opentelemetry-cpp/1.26.0")
        self.requires("protobuf/6.33.5")
        self.requires("spdlog/1.17.0")
        self.requires("jwt-cpp/0.7.2")
        #self.requires("onetbb/2022.3.0")
        self.requires("libpqxx/8.0.1")
-       self.requires("boost/1.89.0")
-       self.requires("openldap/2.6.7")
+       self.requires("boost/1.91.0")
+       #self.requires("openldap/2.6.7")
        #self.requires("openssl/4.0.1")
        self.requires('libsodium/1.0.22')
 

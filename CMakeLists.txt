@@ -218,7 +218,26 @@ target_link_libraries(uEventAnalysisToolUserManager
                               spdlog::spdlog_header_only
                               Boost::headers Boost::json Boost::program_options )
 
-
+if (${WITH_CONAN})
+   target_link_libraries(uEventAnalysisToolBackend
+                         PRIVATE opentelemetry-cpp::opentelemetry-cpp
+                                 opentelemetry-cpp::proto_grpc
+                                 opentelemetry-cpp::exporter_otlp_grpc
+                                 opentelemetry-cpp::exporter_otlp_grpc_client
+                                 opentelemetry-cpp::exporter_otlp_grpc_metrics
+                                 opentelemetry-cpp::exporter_otlp_http 
+                                 opentelemetry-cpp::exporter_otlp_http_client
+                                 opentelemetry-cpp::exporter_otlp_http_metric
+                                 opentelemetry-cpp::exporter_otlp_http_log
+                                 opentelemetry-cpp::metrics
+                                 opentelemetry-cpp::common
+                                 opentelemetry-cpp::api)
+   target_compile_definitions(uEventAnalysisToolBackend PRIVATE WITH_OTLP_GRPC)
+else()
+   target_link_libraries(uEventAnalysisToolBackend
+                         PRIVATE opentelemetry-cpp::otlp_http_log_record_exporter
+                                 opentelemetry-cpp::otlp_http_metric_exporter)
+endif()
 
 ##########################################################################################
 #                                      Testing                                           #

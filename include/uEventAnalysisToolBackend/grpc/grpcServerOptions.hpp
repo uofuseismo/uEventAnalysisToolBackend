@@ -1,10 +1,11 @@
 #ifndef UEVENT_ANALYSIS_TOOL_BACKEND_GRPC_GRPC_SERVER_OPTIONS_HPP
 #define UEVENT_ANALYSIS_TOOL_BACKEND_GRPC_GRPC_SERVER_OPTIONS_HPP
+#include <chrono>
 #include <cstdint>
-#include <string>
-#include <memory>
 #include <filesystem>
+#include <memory>
 #include <optional>
+#include <string>
 namespace UEventAnalysisToolBackend::GRPC
 {
 /// @class GRPCServerOptions grpcServerOptions.hpp
@@ -61,6 +62,37 @@ public:
     /// @result The client ceritificate.
     [[nodiscard]] std::optional<std::string> getClientCertificate() const noexcept;
 
+    /// @brief Enables reflection.
+    void enableReflection() noexcept;
+    /// @brief Disables reflections.
+    void disableReflection() noexcept;
+    /// @result True indicates reflection is enabled.  
+    /// @note By default this is false.
+    [[nodiscard]] bool isReflectionEnabled() const noexcept;
+
+    /// @brief Sets the maximum request message size in bytes.
+    /// @throws std::invalid_argument if maxMessageSize is not positive.
+    void setMaximumRequestMessageSizeInBytes(int maxMessageSize);
+    /// @result The maximum message size in bytes.
+    /// @note By default this is 65536.  Assuming about 100 bytes per station
+    ///       observation this is about 650 stations.
+    [[nodiscard]] int getMaximumRequestMessageSizeInBytes() const noexcept;
+
+    /// @brief Sets the maximum connection age.  After this amount of time
+    ///        the connection is terminated.
+    void setMaximumConnectionAge(const std::chrono::milliseconds &maxConnectionAge);
+    /// @result The maximum connection age.
+    /// @note By default this is 2 minutes.
+    [[nodiscard]] std::chrono::milliseconds getMaximumConnectionAge() const noexcept;
+
+    /// @brief After the maximum connection age is hit, this is the amount of
+    ///        of time to wait for the RPC to finish.
+    void setMaximumConnectionAgeGracePeriod(const std::chrono::milliseconds &maxGracePeriod);
+    /// @result The maximum grace period for RPCs belonging to connections
+    ///         that look stale.
+    /// @note By default this is 2 seconds.
+    [[nodiscard]] std::chrono::milliseconds getMaximumConnectionAgeGracePeriod() const noexcept;
+
     /// @brief Destructor
     ~GRPCServerOptions();
     /// @brief Copy constructor.
@@ -75,5 +107,11 @@ private:
     class GRPCServerOptionsImpl;
     std::unique_ptr<GRPCServerOptionsImpl> pImpl;
 };
+
+/// @brief Generates the gRPC server options from an initialization file.
+[[nodiscard]] GRPCServerOptions fromInitializationFile(
+    const std::filesystem::path &iniFile,
+    const std::string &section = "GRPCServer");    
+
 }
 #endif

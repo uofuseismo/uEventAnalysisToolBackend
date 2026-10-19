@@ -12,7 +12,7 @@ package UEventAnalysisToolAPI.Admin.V1;
 /**
  * Facilitates user management by administrators.
  */
-service Service {
+service AdminService {
    // Allows user to list their keys.  
    //rpc ListKeys(ListKeysRequest) returns(ListKeysResponse) {}; 
    // Allows user to delete a key (invalidates but does not delete the key).

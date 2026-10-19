@@ -8,7 +8,7 @@ import "uEventAnalysisToolAPI/settings/v1/map_provider_request.proto";
 /**
  * A mechanism to pass need-to-know application settings to the frontend.
  */
-service Service {
+service SettingsService {
    // Returns the map provider information for maps in the UI.
    rpc GetMapProvider(MapProviderRequest) returns(MapProviderResponse) {};
    // Allows user to delete a key (invalidates but does not delete the key).

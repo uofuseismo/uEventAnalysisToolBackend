@@ -1,6 +1,6 @@
 edition = "2023";
 
-package UEventAnalysisToolAPI.Setings.V1;
+package UEventAnalysisToolAPI.Settings.V1;
 
 import "uEventAnalysisToolAPI/settings/v1/map_provider_response.proto";
 import "uEventAnalysisToolAPI/settings/v1/map_provider_request.proto";

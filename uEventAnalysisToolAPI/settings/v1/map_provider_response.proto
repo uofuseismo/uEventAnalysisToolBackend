@@ -3,17 +3,20 @@ edition = "2023";
 package UEventAnalysisToolAPI.Settings.V1;
 
 /**
- * Defines a map provider.
+ * Defines a response to the map provider request.
  */
-message MapProvider {
+message MapProviderResponse {
    enum Provider {
       // Default value.  This value is unused.
       PROVIDER_UNSPECIFIED = 0;
       // Stadia Maps
       PROVIDER_STADIA = 1;
    }
+   // The corresponding request identifier.
+   string identifier = 1;
    // The API key for the provider.
-   string key = 1;
+   string key = 2;
    // The map provider.
-   Provider provider = 2;
+   Provider provider = 3;
+   // Any additional messages. 
 }

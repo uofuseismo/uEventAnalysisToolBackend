@@ -1,0 +1,21 @@
+edition = "2023";
+
+package UEventAnalysisToolAPI.Setings.V1;
+
+import "uEventAnalysisToolAPI/settings/v1/map_provider_response.proto";
+import "uEventAnalysisToolAPI/settings/v1/map_provider_request.proto";
+
+/**
+ * A mechanism to pass need-to-know application settings to the frontend.
+ */
+service Service {
+   // Returns the map provider information for maps in the UI.
+   rpc GetMapProvider(MapProviderRequest) returns(MapProviderResponse) {};
+   // Allows user to delete a key (invalidates but does not delete the key).
+   //rpc RevokeKey(RevokeKeyRequest) returns(RevokeKeyResponse) {}; 
+   // Allows a user to add a key.
+   //rpc AddKey(AddKeyRequest) returns(AddKeyResponse) {}; 
+   // Allows a user to change their password.
+   //rpc ChangePassword(ChangePasswordRequest) returns(ChangePasswordResponse) {}; 
+}
+

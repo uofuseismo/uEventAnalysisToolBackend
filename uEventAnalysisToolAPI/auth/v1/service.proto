@@ -1,0 +1,21 @@
+edition = "2023";
+
+package UEventAnalysisToolAPI.Auth.V1;
+
+import "uEventAnalysisToolAPI/auth/v1/login_with_password_request.proto";
+import "uEventAnalysisToolAPI/auth/v1/login_with_password_response.proto";
+
+/**
+ * Handles a basic login requests for a user.  
+ */
+service AuthService {
+   // Log-in with basic credentials request.  In this case the client will pass
+   // their credentials in the HTTP Authorization: Basic asdf8942kd2= field
+   // where the user name and password (asdf8942kd2=0 is the base64 encoded
+   // string of the form user:password  
+   rpc LoginWithPassword(LoginWithPasswordRequest) returns(LoginwithPasswordResponse) {};
+   // Log-in with a key.  In this case the client will pass their key via
+   // the message payload. 
+   //rpc LoginWithKey(LoginWithKeyRequest) returns(LoginWithKeyResponse) {};
+}
+

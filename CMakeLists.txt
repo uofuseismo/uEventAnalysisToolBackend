@@ -123,7 +123,7 @@ set(WILL_BE_DELETED_SRC
     lib/database/aqms/stationDurationMagnitude.cpp
     )
 set(PROTO_SRC
-    uEventAnalysisToolAPI/admin/v1/service.proto
+    #uEventAnalysisToolAPI/admin/v1/service.proto
     uEventAnalysisToolAPI/auth/v1/change_password_request.proto
     uEventAnalysisToolAPI/auth/v1/change_password_response.proto
     uEventAnalysisToolAPI/auth/v1/login_with_password_request.proto
@@ -205,22 +205,6 @@ target_link_libraries(uEventAnalysisToolBackend
                       PRIVATE uEventAnalysisToolBackend::libuEventAnalysisToolBackend
                               Boost::headers Boost::program_options)
 
-add_executable(uEventAnalysisToolUserManager
-               src/manageUsers.cpp)
-set_target_properties(uEventAnalysisToolUserManager PROPERTIES
-                      CXX_STANDARD 23
-                      CXX_STANDARD_REQUIRED YES 
-                      CXX_EXTENSIONS NO) 
-target_include_directories(uEventAnalysisToolUserManager
-                           PRIVATE $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
-                           PRIVATE $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
-                           PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
-                          )
-target_link_libraries(uEventAnalysisToolUserManager
-                      PRIVATE uEventAnalysisToolBackend::libuEventAnalysisToolBackend
-                              spdlog::spdlog_header_only
-                              Boost::headers Boost::json Boost::program_options )
-
 if (${WITH_CONAN})
    target_link_libraries(uEventAnalysisToolBackend
                          PRIVATE opentelemetry-cpp::opentelemetry-cpp
@@ -241,6 +225,23 @@ else()
                          PRIVATE opentelemetry-cpp::otlp_http_log_record_exporter
                                  opentelemetry-cpp::otlp_http_metric_exporter)
 endif()
+
+#add_executable(uEventAnalysisToolUserManager
+#               src/manageUsers.cpp)
+#set_target_properties(uEventAnalysisToolUserManager PROPERTIES
+#                      CXX_STANDARD 23
+#                      CXX_STANDARD_REQUIRED YES 
+#                      CXX_EXTENSIONS NO) 
+#target_include_directories(uEventAnalysisToolUserManager
+#                           PRIVATE $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+#                           PRIVATE $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+#                           PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+#                          )
+#target_link_libraries(uEventAnalysisToolUserManager
+#                      PRIVATE uEventAnalysisToolBackend::libuEventAnalysisToolBackend
+#                              spdlog::spdlog_header_only
+#                              Boost::headers Boost::json Boost::program_options )
+
 
 ##########################################################################################
 #                                      Testing                                           #
@@ -293,7 +294,7 @@ install(TARGETS libuEventAnalysisToolBackend
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         COMPONENT libraries)
-install(TARGETS uEventAnalysisToolBackend uEventAnalysisToolUserManager
+install(TARGETS uEventAnalysisToolBackend #uEventAnalysisToolUserManager
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         COMPONENT applications)
 install(EXPORT ${PROJECT_NAME}Targets

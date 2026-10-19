@@ -129,6 +129,9 @@ set(PROTO_SRC
     uEventAnalysisToolAPI/auth/v1/login_with_password_request.proto
     uEventAnalysisToolAPI/auth/v1/login_with_password_response.proto
     uEventAnalysisToolAPI/auth/v1/service.proto
+    uEventAnalysisToolAPI/settings/v1/map_provider_request.proto
+    uEventAnalysisToolAPI/settings/v1/map_provider_response.proto
+    uEventAnalysisToolAPI/settings/v1/service.proto
     #uEventAnalysisToolAPI/v1/userSettings/add_key_request.proto
     #uEventAnalysisToolAPI/v1/userSettings/add_key_response.proto
     #uEventAnalysisToolAPI/v1/userSettings/change_password_request.proto

@@ -1,0 +1,3 @@
+--- Purpose: utah-specific schema extensions.  Applied to both the
+--- utah and sandbox_utah schemas after createRegionCore.sql.
+--- No deviations from the core yet.

@@ -1,0 +1,3 @@
+--- Purpose: ynp-specific schema extensions.  Applied to both the
+--- ynp and sandbox_ynp schemas after createRegionCore.sql.
+--- No deviations from the core yet.

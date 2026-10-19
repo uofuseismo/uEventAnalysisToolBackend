@@ -1,0 +1,3 @@
+--- Purpose: forge-specific schema extensions.  Applied to both the
+--- forge and sandbox_forge schemas after createRegionCore.sql.
+--- No deviations from the core yet.

@@ -2,14 +2,12 @@ edition = "2023";
 
 package UEventAnalysisToolAPI.Admin.V1;
 
-import "uEventAnalysisToolAPI/v1/userSettings/add_key_request.proto";
-import "uEventAnalysisToolAPI/v1/userSettings/add_key_response.proto";
-import "uEventAnalysisToolAPI/v1/userSettings/change_password_request.proto";
-import "uEventAnalysisToolAPI/v1/userSettings/change_password_response.proto";
-import "uEventAnalysisToolAPI/v1/userSettings/list_keys_request.proto";
-import "uEventAnalysisToolAPI/v1/userSettings/list_keys_response.proto";
-import "uEventAnalysisToolAPI/v1/userSettings/revoke_key_request.proto";
-import "uEventAnalysisToolAPI/v1/userSettings/revoke_key_response.proto";
+//import "uEventAnalysisToolAPI/v1/userSettings/add_key_request.proto";
+//import "uEventAnalysisToolAPI/v1/userSettings/add_key_response.proto";
+//import "uEventAnalysisToolAPI/v1/userSettings/list_keys_request.proto";
+//import "uEventAnalysisToolAPI/v1/userSettings/list_keys_response.proto";
+//import "uEventAnalysisToolAPI/v1/userSettings/revoke_key_request.proto";
+//import "uEventAnalysisToolAPI/v1/userSettings/revoke_key_response.proto";
 
 /**
  * Facilitates user management by administrators.

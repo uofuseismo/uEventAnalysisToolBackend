@@ -6,6 +6,4 @@ package UEventAnalysisToolAPI.Settings.V1;
  * Requests the map provider information.
  */
 message MapProviderRequest {
-   // The map provider request identifier.
-   string identifier = 1 [default = ""];
 }

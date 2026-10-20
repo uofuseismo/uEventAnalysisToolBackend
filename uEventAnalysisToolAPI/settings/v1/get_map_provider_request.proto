@@ -5,5 +5,5 @@ package UEventAnalysisToolAPI.Settings.V1;
 /**
  * Requests the map provider information.
  */
-message MapProviderRequest {
+message GetMapProviderRequest {
 }

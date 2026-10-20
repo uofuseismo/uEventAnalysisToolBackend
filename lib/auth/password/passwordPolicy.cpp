@@ -7,14 +7,14 @@
 #include <boost/property_tree/ptree_fwd.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
-#include <uEventAnalysisToolAPI/auth/v1/password_requirements_response.pb.h>
+#include <uEventAnalysisToolAPI/auth/v1/password_requirements.pb.h>
 
 using namespace UEventAnalysisToolBackend::Auth::Password;
 
 class PasswordPolicy::PasswordPolicyImpl
 {
 public:
-    int mMinimumLength{12};
+    std::pair<int, int> mMinimumAndMaximumLength{12, 64};
     bool mRequiresSpecialCharacter{false};
     bool mRequiresNumber{true};
     bool mNewAndOldPasswordMustBeDifferent{true};
@@ -58,18 +58,22 @@ PasswordPolicy& PasswordPolicy::operator=(PasswordPolicy &&policy) noexcept
 PasswordPolicy::~PasswordPolicy() = default;
 
 /// Minimum password length
-void PasswordPolicy::setMinimumLength(const int length)
+void PasswordPolicy::setMinimumAndMaximumLength(const std::pair<int, int> &minAndMax)
 {
-    if (length < 1)
+    if (minAndMax.first < 1)
     {
         throw std::invalid_argument("Minimum password length must be positive");
     }
-    pImpl->mMinimumLength = length;
+    if (minAndMax.second <= minAndMax.first)
+    {
+        throw std::invalid_argument("Maximum length must exceed minimum length");
+    }
+    pImpl->mMinimumAndMaximumLength = minAndMax;
 }
 
-int PasswordPolicy::getMinimumLength() const noexcept
+std::pair<int, int> PasswordPolicy::getMinimumAndMaximumLength() const noexcept
 {
-    return pImpl->mMinimumLength;
+    return pImpl->mMinimumAndMaximumLength;
 }
 
 /// Number
@@ -122,12 +126,13 @@ bool PasswordPolicy::newAndOldPasswordMustDiffer() const noexcept
 
 /// Conversions
 template<>
-UEventAnalysisToolAPI::Auth::V1::PasswordRequirementsResponse
-PasswordPolicy::toMessage(const std::string &identifier) const noexcept
+UEventAnalysisToolAPI::Auth::V1::PasswordRequirements
+PasswordPolicy::toMessage() const noexcept
 {
-    UEventAnalysisToolAPI::Auth::V1::PasswordRequirementsResponse response;
-    response.set_identifier(identifier);
-    response.set_minimum_length(getMinimumLength());
+    UEventAnalysisToolAPI::Auth::V1::PasswordRequirements response;
+    auto [minLength, maxLength ] getMinimumAndMaximumLength();
+    response.set_minimum_length(minLength);
+    response.set_maximum_length(maxLength);
     response.set_requires_number(requiresNumber());
     response.set_requires_special_character(requiresSpecialCharacter());
     response.set_new_and_old_password_must_differ(newAndOldPasswordMustDiffer());
@@ -185,11 +190,11 @@ PasswordPolicy PasswordPolicy::fromInitializationFile(
         result.disableRequiresSpecialCharacter();
     }
 
-    auto newAndOldPasswordMustBeDifferent
+    auto newAndOldPasswordMustDiffer
         = propertyTree.get<bool>
-          (section + "newAndOldMustBeDifferent",
+          (section + "newAndOldPasswordMustDiffer",
            result.newAndOldPasswordMustDiffer());
-    if (newAndOldPasswordMustBeDifferent)
+    if (newAndOldPasswordMustDiffer)
     {
         result.enableNewAndOldPasswordMustDiffer();
     }

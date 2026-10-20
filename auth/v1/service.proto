@@ -6,6 +6,8 @@ import "uEventAnalysisToolAPI/auth/v1/change_password_request.proto";
 import "uEventAnalysisToolAPI/auth/v1/change_password_response.proto";
 import "uEventAnalysisToolAPI/auth/v1/login_with_password_request.proto";
 import "uEventAnalysisToolAPI/auth/v1/login_with_password_response.proto";
+import "uEventAnalysisToolAPI/auth/v1/password_requirements_request.proto";
+import "uEventAnalysisToolAPI/auth/v1/password_requirements_response.proto";
 
 /**
  * Handles a basic login requests for a user.  
@@ -19,6 +21,9 @@ service AuthService {
    // where the user name and password (asdf8942kd2=0 is the base64 encoded
    // string of the form user:password  
    rpc LoginWithPassword(LoginWithPasswordRequest) returns(LoginWithPasswordResponse) {};
+   // Defines the password criteria for the frontend to help the user successfully
+   // change their password.
+   rpc GetPasswordRequirements(PasswordRequirementsRequest) returns(PasswordRequirementsResponse) {};
    // Log-in with a key.  In this case the client will pass their key via
    // the message payload. 
    //rpc LoginWithKey(LoginWithKeyRequest) returns(LoginWithKeyResponse) {};

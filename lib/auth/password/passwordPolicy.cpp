@@ -7,6 +7,7 @@
 #include <boost/property_tree/ptree_fwd.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
+#include <uEventAnalysisToolAPI/auth/v1/password_requirements_response.pb.h>
 
 using namespace UEventAnalysisToolBackend::Auth::Password;
 
@@ -117,6 +118,20 @@ void PasswordPolicy::disableNewAndOldPasswordMustDiffer() noexcept
 bool PasswordPolicy::newAndOldPasswordMustDiffer() const noexcept
 {
     return pImpl->mNewAndOldPasswordMustBeDifferent;
+}
+
+/// Conversions
+template<>
+UEventAnalysisToolAPI::Auth::V1::PasswordRequirementsResponse
+PasswordPolicy::toMessage(const std::string &identifier) const noexcept
+{
+    UEventAnalysisToolAPI::Auth::V1::PasswordRequirementsResponse response;
+    response.set_identifier(identifier);
+    response.set_minimum_password_length(getMinimumLength());
+    response.set_requires_number(requiresNumber());
+    response.set_requires_special_character(requiresSpecialCharacter());
+    response.set_new_and_old_password_must_differ(newAndOldPasswordMustDiffer());
+    return response;
 }
 
 PasswordPolicy PasswordPolicy::fromInitializationFile(

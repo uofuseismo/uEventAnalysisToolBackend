@@ -59,6 +59,11 @@ public:
     /// @throws std::invalid_argument if the ini file path does not exist.
     [[nodiscard]] static PasswordPolicy fromInitializationFile(const std::filesystem::path &path, const std::string &section = "UserPasswordPolicy");
 
+    /// @brief Converts the parameters to a message.
+    /// @param[in] identifier  The request identifier.
+    /// @note This is defined for UEventAnalysisToolAPI::Auth::V1::PasswordRequirementsResponse.
+    template<typename U> [[nodiscard]] U toMessage(const std::string &identifier) const noexcept;
+
     /// @brief Destructor.
     ~PasswordPolicy();
     /// @brief Copy assignment.

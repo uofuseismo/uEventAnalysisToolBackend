@@ -5,18 +5,15 @@ package UEventAnalysisToolAPI.Settings.V1;
 /**
  * Defines a response to the map provider request.
  */
-message MapProviderResponse {
+message MapProvider {
    enum Provider {
       // Default value.  This value is unused.
       PROVIDER_UNSPECIFIED = 0;
       // Stadia Maps
       PROVIDER_STADIA = 1;
    }
-   // The corresponding request identifier.
-   string identifier = 1;
    // The API key for the provider.
-   string key = 2;
+   string key = 1;
    // The map provider.
-   Provider provider = 3;
-   // Any additional messages. 
+   Provider provider = 2;
 }

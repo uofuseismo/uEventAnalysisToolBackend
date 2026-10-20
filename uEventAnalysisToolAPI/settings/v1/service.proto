@@ -3,14 +3,14 @@ edition = "2023";
 package UEventAnalysisToolAPI.Settings.V1;
 
 import "uEventAnalysisToolAPI/settings/v1/map_provider_response.proto";
-import "uEventAnalysisToolAPI/settings/v1/map_provider_request.proto";
+import "uEventAnalysisToolAPI/settings/v1/map_provider.proto";
 
 /**
  * A mechanism to pass need-to-know application settings to the frontend.
  */
 service SettingsService {
    // Returns the map provider information for maps in the UI.
-   rpc GetMapProvider(MapProviderRequest) returns(MapProviderResponse) {};
+   rpc GetMapProvider(MapProviderRequest) returns(MapProvider) {};
    // Allows user to delete a key (invalidates but does not delete the key).
    //rpc RevokeKey(RevokeKeyRequest) returns(RevokeKeyResponse) {}; 
    // Allows a user to add a key.

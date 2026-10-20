@@ -5,11 +5,16 @@
 #include <utility>
 #include <vector>
 #include <spdlog/logger.h>
-#include <uEventAnalysisToolBackend/auth/authenticator.hpp>
+#include "uEventAnalysisToolBackend/auth/authenticator.hpp"
+#include "uEventAnalysisToolBackend/auth/password/hasher.hpp"
 
 namespace UEventAnalysisToolBackend::Auth
 {
  class DatabaseOptions;
+ namespace Password
+ {
+  class Hasher;
+ }
 }
 
 namespace UEventAnalysisToolBackend::Auth
@@ -23,6 +28,7 @@ class Database : public IAuthenticator
 public:
     /// @brief Constructor.
     Database(const DatabaseOptions &options,
+             std::unique_ptr<Password::Hasher> &&hasher,
              std::shared_ptr<spdlog::logger> logger); 
  
     /// @brief Authenticate the user and password.

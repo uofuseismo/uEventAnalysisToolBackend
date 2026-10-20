@@ -18,6 +18,7 @@
 #include "uEventAnalysisToolBackend/auth/database.hpp"
 #include "uEventAnalysisToolBackend/auth/databaseOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/authenticator.hpp"
+#include "uEventAnalysisToolBackend/auth/password/hasher.hpp"
 #include "uEventAnalysisToolBackend/database/credentials.hpp"
 
 using namespace UEventAnalysisToolBackend::Auth;
@@ -26,8 +27,10 @@ class Database::DatabaseImpl
 {
 public:
     DatabaseImpl(const DatabaseOptions &options,
+                 std::unique_ptr<Password::Hasher> &&hasher,
                  std::shared_ptr<spdlog::logger> logger) :
         mOptions(options),
+        mPasswordHasher(std::move(hasher)),
         mLogger(std::move(logger))
     {
         if (!mOptions.hasCredentials())
@@ -118,26 +121,17 @@ public:
         return false; 
     }
 
-    /// @brief Hashes a password for storage.
-    [[nodiscard]] std::string hashPassword(const std::string &password) const
+    /// @brief Checks the connection and reconnects if necessary.
+    void checkConnection()
     {
-        std::string hashedPassword;
-        hashedPassword.resize(crypto_pwhash_STRBYTES);
-        // 0.7 seconds on a 2.8 GHz i7 and 256 Mb of RAM
-        if (crypto_pwhash_str(hashedPassword.data(), // Output
-                              password.c_str(),      // Input
-                              password.length(),
-                              mOperationsLimit,
-                              mMemoryLimit) != 0)
+        if (!isConnected())
         {
-            throw std::runtime_error("Out of memory");
+            connect();
+            if (!isConnected())
+            {
+                throw std::runtime_error("Could not connect to database");
+            }
         }
-        // crypto_pwhash_str wrote a NUL-terminated C string into a
-        // maximum-size buffer; the encoded hash is shorter than
-        // crypto_pwhash_STRBYTES so truncate at the first NUL - postgres
-        // rejects TEXT with embedded NULs.
-        hashedPassword.resize(std::strlen(hashedPassword.c_str()));
-        return hashedPassword;
     }
 
     /// @brief Updates the user password.
@@ -146,9 +140,10 @@ public:
     {
         const auto &user = userAndPassword.first;
         if (user.empty()){throw std::invalid_argument("User is empty");}
+        checkConnection();
         const auto &password = userAndPassword.second;
         if (password.empty()){throw std::invalid_argument("Password is empty");}
-        auto hashedPassword = hashPassword(password);
+        auto hashedPassword = mPasswordHasher->hash(password);
         constexpr std::string_view query{"SELECT auth.update_user_password($1, $2)"};
         const pqxx::params parameters{user, hashedPassword};
         bool success{false};
@@ -168,9 +163,10 @@ public:
     {
         const auto &user = userAndPassword.first;
         if (user.empty()){throw std::invalid_argument("User is empty");}
+        checkConnection();
         const auto &password = userAndPassword.second;
         if (password.empty()){throw std::invalid_argument("Password is empty");}
-        auto hashedPassword = hashPassword(password);
+        auto hashedPassword = mPasswordHasher->hash(password);
         constexpr std::string_view query{"SELECT auth.add_user($1, $2)"};
         const pqxx::params parameters{user, hashedPassword};
         bool success{false};
@@ -189,6 +185,7 @@ public:
     [[nodiscard]] bool removeUser(const std::string &user)
     {
         if (user.empty()){throw std::invalid_argument("User is empty");}
+        checkConnection();
         constexpr std::string_view query{"SELECT auth.remove_user($1)"};
         const pqxx::params parameters{user};
         bool success{false};
@@ -204,9 +201,10 @@ public:
 
     /// @brief Gets the (schema, permission) pairs for the user.
     [[nodiscard]] std::vector<std::pair<std::string, std::string>>
-        getPermissions(const std::string &user) const
+        getPermissions(const std::string &user)
     {
         if (user.empty()){throw std::invalid_argument("User is empty");}
+        checkConnection();
         constexpr std::string_view query{
             "SELECT schema_name, permission_name FROM auth.list_user_schemas($1)"};
         const pqxx::params parameters{user};
@@ -226,13 +224,14 @@ public:
     /// @brief Gets the hashed password from the database.
     /// @result The hashed password (or null if the user does not exist).
     [[nodiscard]] std::optional<std::string> 
-        getHashedPasswordFromDatabase(const std::string &user) const
+        getHashedPasswordFromDatabase(const std::string &user)
     {
         std::optional<std::string> hashedPassword; 
         if (user.empty())
         {
             throw std::runtime_error("User is empty");
         } 
+        checkConnection();
         constexpr std::string_view query{"SELECT auth.get_password_hash($1)"};
         const pqxx::params parameters{user};
         // Null indicates no user
@@ -253,6 +252,7 @@ public:
     {
         bool success{false};
         constexpr std::string_view query{"SELECT auth.record_login($1)"};
+        checkConnection();
         const pqxx::params parameters{user};
         {
         const std::scoped_lock lock(mDatabaseMutex);
@@ -304,6 +304,7 @@ public:
             throw std::invalid_argument(
                 "Public key is not a base64 ed25519 public key");
         }
+        checkConnection();
         constexpr std::string_view query{"SELECT auth.add_user_key($1, $2, $3)"};
         const pqxx::params parameters{user, keyName, publicKey};
         bool success{false};
@@ -324,6 +325,7 @@ public:
     {
         if (user.empty()){throw std::invalid_argument("User is empty");}
         if (keyName.empty()){throw std::invalid_argument("Key name is empty");}
+        checkConnection();
         constexpr std::string_view query{"SELECT auth.revoke_user_key($1, $2)"};
         const pqxx::params parameters{user, keyName};
         bool success{false};
@@ -339,13 +341,15 @@ public:
 
     // Get user by their (public) key.  Only active (unrevoked, unexpired)
     // keys resolve to a user.
-    [[nodiscard]] std::optional<std::string> getUserByKey(const std::string &publicKey) const
+    [[nodiscard]] 
+    std::optional<std::string> getUserByKey(const std::string &publicKey)
     {
         std::optional<std::string> result{std::nullopt};
         if (publicKey.empty())
         {
             throw std::invalid_argument("Public key is empty");
         }
+        checkConnection();
         constexpr std::string_view query{"SELECT auth.get_user_by_key($1)"};
         const pqxx::params parameters{publicKey};
         {
@@ -366,6 +370,7 @@ public:
     {
         bool success{false};
         constexpr std::string_view query{"SELECT auth.record_key_use($1)"};
+        checkConnection();
         const pqxx::params parameters{publicKey};
         {
         const std::scoped_lock lock(mDatabaseMutex);
@@ -449,10 +454,19 @@ public:
                                        user); 
                 }
                 // In case I changed some parameters see if we need a rehash
-                if (crypto_pwhash_str_needs_rehash(
-                       hashedPassword->c_str(),
-                       crypto_pwhash_OPSLIMIT_INTERACTIVE,
-                       crypto_pwhash_MEMLIMIT_INTERACTIVE))
+                bool needsRehash{false};
+                try
+                {
+                    needsRehash = mPasswordHasher->needsRehash(*hashedPassword);
+                }
+                catch (const std::exception &e)
+                {
+                    needsRehash = true;
+                    SPDLOG_LOGGER_WARN(mLogger,
+                                       "Will rehash password because {}",
+                                       e.what());
+                }
+                if (needsRehash)
                 {
                     // Stored hash uses old/different params. 
                     // We'll update that now.
@@ -496,18 +510,22 @@ public:
         return IAuthenticator::Result::ServerError;
     }
     DatabaseOptions mOptions;
+    std::unique_ptr<Password::Hasher> mPasswordHasher{nullptr};
     std::shared_ptr<spdlog::logger> mLogger{nullptr};
     mutable std::mutex mDatabaseMutex;
     std::unique_ptr<pqxx::connection> mConnection{nullptr};
-    int mOperationsLimit{crypto_pwhash_OPSLIMIT_MODERATE}; 
-    int mMemoryLimit{crypto_pwhash_MEMLIMIT_MODERATE};
+//    int mOperationsLimit{crypto_pwhash_OPSLIMIT_MODERATE}; 
+//    int mMemoryLimit{crypto_pwhash_MEMLIMIT_MODERATE};
     bool mInitialized{false};
 };
 
 /// Constructor
 Database::Database(const DatabaseOptions &options,
+                   std::unique_ptr<Password::Hasher> &&hasher,
                    std::shared_ptr<spdlog::logger> logger) :
-    pImpl(std::make_unique<DatabaseImpl> (options, std::move(logger)))
+    pImpl(std::make_unique<DatabaseImpl> (options,
+                                          std::move(hasher),
+                                          std::move(logger)))
 {
 }
 

@@ -75,6 +75,9 @@ set(HEADER_FILES
     include/uEventAnalysisToolBackend/auth/grpc.hpp
     include/uEventAnalysisToolBackend/auth/jsonWebToken.hpp
     include/uEventAnalysisToolBackend/auth/jsonWebTokenOptions.hpp
+    include/uEventAnalysisToolBackend/auth/password/hasher.hpp
+    include/uEventAnalysisToolBackend/auth/password/hasherOptions.hpp
+    include/uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp
     include/uEventAnalysisToolBackend/database/credentials.hpp
     include/uEventAnalysisToolBackend/grpc/grpcServerOptions.hpp
     include/uEventAnalysisToolBackend/grpc/server.hpp
@@ -102,6 +105,9 @@ set(LIBRARY_SRC
     lib/auth/grpc.cpp
     lib/auth/jsonWebToken.cpp
     lib/auth/jsonWebTokenOptions.cpp
+    lib/auth/password/hasher.cpp
+    lib/auth/password/hasherOptions.cpp
+    lib/auth/password/passwordPolicy.cpp
     lib/database/credentials.cpp
     lib/grpc/grpcServerOptions.cpp
     lib/grpc/server.cpp
@@ -254,6 +260,8 @@ if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
                   testing/auth/jsonWebToken.cpp
                   testing/auth/authNZ.cpp
                   testing/auth/grpc.cpp
+                  testing/auth/password/hasher.cpp
+                  testing/auth/password/hasherOptions.cpp
                   testing/database/credentials.cpp
                   testing/database/aqms.cpp
    )

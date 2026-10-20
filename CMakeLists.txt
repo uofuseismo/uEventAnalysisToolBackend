@@ -135,10 +135,10 @@ set(PROTO_SRC
     uEventAnalysisToolAPI/auth/v1/login_with_password_request.proto
     uEventAnalysisToolAPI/auth/v1/login_with_password_response.proto
     uEventAnalysisToolAPI/auth/v1/password_requirements_request.proto
-    uEventAnalysisToolAPI/auth/v1/password_requirements_response.proto
+    uEventAnalysisToolAPI/auth/v1/password_requirements.proto
     uEventAnalysisToolAPI/auth/v1/service.proto
     uEventAnalysisToolAPI/settings/v1/map_provider_request.proto
-    uEventAnalysisToolAPI/settings/v1/map_provider_response.proto
+    uEventAnalysisToolAPI/settings/v1/map_provider.proto
     uEventAnalysisToolAPI/settings/v1/service.proto
     #uEventAnalysisToolAPI/v1/userSettings/add_key_request.proto
     #uEventAnalysisToolAPI/v1/userSettings/add_key_response.proto
@@ -264,8 +264,10 @@ if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
                   testing/auth/grpc.cpp
                   testing/auth/password/hasher.cpp
                   testing/auth/password/hasherOptions.cpp
+                  #testing/auth/password/passwordPolicy.cpp
                   testing/database/credentials.cpp
                   testing/database/aqms.cpp
+                  ${PROTO_SRC}
    )
    target_compile_definitions(unitTests
                               PRIVATE TESTING_DATA_DIR="${CMAKE_SOURCE_DIR}/testing/data")
@@ -284,7 +286,15 @@ if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
                               PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>)
    add_test(NAME unitTests
             COMMAND $<TARGET_FILE:unitTests>)
-
+   protobuf_generate(TARGET unitTests
+                     LANGUAGE cpp 
+                     )   
+   protobuf_generate(TARGET unitTests
+                     LANGUAGE grpc
+                     PLUGIN "protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin>"
+                     PLUGIN_OPTIONS generate_mock_code=true
+                     GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
+                    )   
 endif()
 
 ##########################################################################################

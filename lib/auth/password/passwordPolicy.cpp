@@ -127,7 +127,7 @@ PasswordPolicy::toMessage(const std::string &identifier) const noexcept
 {
     UEventAnalysisToolAPI::Auth::V1::PasswordRequirementsResponse response;
     response.set_identifier(identifier);
-    response.set_minimum_password_length(getMinimumLength());
+    response.set_minimum_length(getMinimumLength());
     response.set_requires_number(requiresNumber());
     response.set_requires_special_character(requiresSpecialCharacter());
     response.set_new_and_old_password_must_differ(newAndOldPasswordMustDiffer());

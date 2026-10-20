@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <memory>
+#include <utility>
 
 namespace UEventAnalysisToolBackend::Auth::Password
 {
@@ -23,11 +24,12 @@ public:
 
     /// @brief Defines the shortest acceptable password in a password change.
     /// @param[in] minimumLength  The minimum password length.
-    /// @throws std::invalid_argument if minimum length is not positive.
-    void setMinimumLength(int minimumLength);
-    /// @result The minimum password length.
-    /// @note By default this is 12. 
-    [[nodiscard]] int getMinimumLength() const noexcept;
+    /// @throws std::invalid_argument if minimum length is not positive
+    ///         or the maximum length is not larger than the minimum length.
+    void setMinimumAndMaximumLength(std::pair<int, int> &minimumLength);
+    /// @result The minimum and maximum password length.
+    /// @note By default this is 12 and 64. 
+    [[nodiscard]] int getMinimumAndMaximumLength() const noexcept;
 
     /// @brief Requires the password has at least one number.
     void enableRequiresNumber() noexcept;
@@ -61,8 +63,8 @@ public:
 
     /// @brief Converts the parameters to a message.
     /// @param[in] identifier  The request identifier.
-    /// @note This is defined for UEventAnalysisToolAPI::Auth::V1::PasswordRequirementsResponse.
-    template<typename U> [[nodiscard]] U toMessage(const std::string &identifier) const noexcept;
+    /// @note This is defined for UEventAnalysisToolAPI::Auth::V1::PasswordRequirements
+    template<typename U> [[nodiscard]] U toMessage() const noexcept;
 
     /// @brief Destructor.
     ~PasswordPolicy();

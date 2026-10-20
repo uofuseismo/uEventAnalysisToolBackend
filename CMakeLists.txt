@@ -134,10 +134,10 @@ set(PROTO_SRC
     uEventAnalysisToolAPI/auth/v1/change_password_response.proto
     uEventAnalysisToolAPI/auth/v1/login_with_password_request.proto
     uEventAnalysisToolAPI/auth/v1/login_with_password_response.proto
-    uEventAnalysisToolAPI/auth/v1/password_requirements_request.proto
+    uEventAnalysisToolAPI/auth/v1/get_password_requirements_request.proto
     uEventAnalysisToolAPI/auth/v1/password_requirements.proto
     uEventAnalysisToolAPI/auth/v1/service.proto
-    uEventAnalysisToolAPI/settings/v1/map_provider_request.proto
+    uEventAnalysisToolAPI/settings/v1/get_map_provider_request.proto
     uEventAnalysisToolAPI/settings/v1/map_provider.proto
     uEventAnalysisToolAPI/settings/v1/service.proto
     #uEventAnalysisToolAPI/v1/userSettings/add_key_request.proto
@@ -264,7 +264,7 @@ if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
                   testing/auth/grpc.cpp
                   testing/auth/password/hasher.cpp
                   testing/auth/password/hasherOptions.cpp
-                  #testing/auth/password/passwordPolicy.cpp
+                  testing/auth/password/passwordPolicy.cpp
                   testing/database/credentials.cpp
                   testing/database/aqms.cpp
                   ${PROTO_SRC}

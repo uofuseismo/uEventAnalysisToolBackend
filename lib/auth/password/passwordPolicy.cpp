@@ -130,7 +130,7 @@ UEventAnalysisToolAPI::Auth::V1::PasswordRequirements
 PasswordPolicy::toMessage() const noexcept
 {
     UEventAnalysisToolAPI::Auth::V1::PasswordRequirements response;
-    auto [minLength, maxLength ] getMinimumAndMaximumLength();
+    auto [minLength, maxLength] = getMinimumAndMaximumLength();
     response.set_minimum_length(minLength);
     response.set_maximum_length(maxLength);
     response.set_requires_number(requiresNumber());
@@ -158,11 +158,11 @@ PasswordPolicy PasswordPolicy::fromInitializationFile(
     boost::property_tree::ptree propertyTree;
     boost::property_tree::ini_parser::read_ini(iniFile, propertyTree);
 
-    const auto minimumLength
-        = propertyTree.get<int>
-           (section + "minimumLength",
-           static_cast<int> (result.getMinimumLength()));
-    result.setMinimumLength(minimumLength);
+    auto [minLength, maxLength] = result.getMinimumAndMaximumLength();
+
+    minLength = propertyTree.get<int> (section + "minimumLength", minLength);
+    maxLength = propertyTree.get<int> (section + "maximumLength", maxLength);
+    result.setMinimumAndMaximumLength(std::pair {minLength, maxLength});
 
     auto requiresNumber
         = propertyTree.get<bool>

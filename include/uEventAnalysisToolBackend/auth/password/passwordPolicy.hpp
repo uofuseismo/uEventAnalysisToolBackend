@@ -23,13 +23,14 @@ public:
     PasswordPolicy(PasswordPolicy &&policy) noexcept;
 
     /// @brief Defines the shortest acceptable password in a password change.
-    /// @param[in] minimumLength  The minimum password length.
+    /// @param[in] minimumAndMaximumLength  The minimum passwordand maximum
+    ///                                     password length.
     /// @throws std::invalid_argument if minimum length is not positive
     ///         or the maximum length is not larger than the minimum length.
-    void setMinimumAndMaximumLength(std::pair<int, int> &minimumLength);
+    void setMinimumAndMaximumLength(const std::pair<int, int> &minimumAndMaximumLength);
     /// @result The minimum and maximum password length.
     /// @note By default this is 12 and 64. 
-    [[nodiscard]] int getMinimumAndMaximumLength() const noexcept;
+    [[nodiscard]] std::pair<int, int> getMinimumAndMaximumLength() const noexcept;
 
     /// @brief Requires the password has at least one number.
     void enableRequiresNumber() noexcept;

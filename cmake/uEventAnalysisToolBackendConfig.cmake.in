@@ -13,7 +13,7 @@
 #   The filter picker library, if found.
 include(CMakeFindDependencyMacro)
 
-#find_dependency(TBB)
+find_dependency(gRPC CONFIG)
 
 @PACKAGE_INIT@
 

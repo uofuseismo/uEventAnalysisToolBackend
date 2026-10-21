@@ -80,6 +80,7 @@ set(HEADER_FILES
     include/uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp
     include/uEventAnalysisToolBackend/database/credentials.hpp
     include/uEventAnalysisToolBackend/grpc/grpcServerOptions.hpp
+    include/uEventAnalysisToolBackend/grpc/requestIdentifierInterceptor.hpp
     include/uEventAnalysisToolBackend/grpc/server.hpp
     include/uEventAnalysisToolBackend/services/loginService.hpp
     include/uEventAnalysisToolBackend/version.hpp
@@ -110,6 +111,7 @@ set(LIBRARY_SRC
     lib/auth/password/passwordPolicy.cpp
     lib/database/credentials.cpp
     lib/grpc/grpcServerOptions.cpp
+    lib/grpc/requestIdentifierInterceptor.cpp
     lib/grpc/server.cpp
     lib/services/loginService.cpp
     lib/version.cpp
@@ -169,7 +171,8 @@ target_include_directories(libuEventAnalysisToolBackend
                            PUBLIC  $<INSTALL_INTERFACE:>
                           )
 target_link_libraries(libuEventAnalysisToolBackend
-                      PRIVATE protobuf::libprotobuf gRPC::grpc gRPC::grpc++
+                      PUBLIC gRPC::grpc++
+                      PRIVATE protobuf::libprotobuf gRPC::grpc
                               jwt-cpp::jwt-cpp
                               libpqxx::pqxx
                               spdlog::spdlog_header_only
@@ -267,6 +270,7 @@ if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
                   testing/auth/password/passwordPolicy.cpp
                   testing/database/credentials.cpp
                   testing/database/aqms.cpp
+                  testing/grpc/requestIdentifierInterceptor.cpp
                   ${PROTO_SRC}
    )
    target_compile_definitions(unitTests

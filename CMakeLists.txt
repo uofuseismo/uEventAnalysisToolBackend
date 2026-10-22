@@ -279,6 +279,7 @@ if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
                   testing/database/credentials.cpp
                   testing/database/aqms.cpp
                   testing/grpc/grpcServerOptions.cpp
+                  testing/grpc/parseAuthorizationHeader.cpp
                   testing/grpc/requestIdentifierInterceptor.cpp
                   ${PROTO_SRC}
    )

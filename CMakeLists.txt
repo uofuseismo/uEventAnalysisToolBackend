@@ -80,9 +80,12 @@ set(HEADER_FILES
     include/uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp
     include/uEventAnalysisToolBackend/database/credentials.hpp
     include/uEventAnalysisToolBackend/grpc/grpcServerOptions.hpp
+    include/uEventAnalysisToolBackend/grpc/parseAuthorizationHeader.hpp
     include/uEventAnalysisToolBackend/grpc/requestIdentifierInterceptor.hpp
     include/uEventAnalysisToolBackend/grpc/server.hpp
     include/uEventAnalysisToolBackend/grpc/serverOptions.hpp
+    include/uEventAnalysisToolBackend/grpc/toRequestIdentifier.hpp
+    include/uEventAnalysisToolBackend/grpc/validateClientAccessToken.hpp
     include/uEventAnalysisToolBackend/services/authService.hpp
     include/uEventAnalysisToolBackend/version.hpp
     )
@@ -112,9 +115,12 @@ set(LIBRARY_SRC
     lib/auth/password/passwordPolicy.cpp
     lib/database/credentials.cpp
     lib/grpc/grpcServerOptions.cpp
+    lib/grpc/parseAuthorizationHeader.cpp
     lib/grpc/requestIdentifierInterceptor.cpp
     lib/grpc/server.cpp
     lib/grpc/serverOptions.cpp
+    lib/grpc/toRequestIdentifier.cpp
+    lib/grpc/validateClientAccessToken.cpp
     lib/services/authService.cpp
     lib/version.cpp
     )

@@ -6,6 +6,12 @@ namespace UEventAnalysisToolBackend::Database
 {
  class Credentials;
 }
+namespace UEventAnalysisToolBackend::Auth::Password
+{
+ class HasherOptions;
+}
+
+
 
 namespace UEventAnalysisToolBackend::Auth
 {
@@ -23,6 +29,11 @@ public:
     DatabaseOptions(const DatabaseOptions &options);
     /// @brief Move constructor.
     DatabaseOptions(DatabaseOptions &&options) noexcept;
+
+    /// @brief Sets the password hasher options.
+    void setPasswordHasherOptions(const Password::HasherOptions &options);
+    /// @result The password hasher options.
+    [[nodiscard]] Password::HasherOptions getPasswordHasherOptions() const noexcept;
 
     /// @brief Sets the credentials for the database with the users table.
     void setCredentials(const UEventAnalysisToolBackend::Database::Credentials &credentials);

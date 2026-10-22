@@ -11,10 +11,6 @@
 namespace UEventAnalysisToolBackend::Auth
 {
  class DatabaseOptions;
- namespace Password
- {
-  class Hasher;
- }
 }
 
 namespace UEventAnalysisToolBackend::Auth
@@ -28,7 +24,6 @@ class Database : public IAuthenticator
 public:
     /// @brief Constructor.
     Database(const DatabaseOptions &options,
-             std::unique_ptr<Password::Hasher> &&hasher,
              std::shared_ptr<spdlog::logger> logger); 
  
     /// @brief Authenticate the user and password.

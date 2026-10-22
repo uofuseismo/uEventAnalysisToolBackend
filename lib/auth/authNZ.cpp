@@ -107,6 +107,10 @@ AuthNZ::authenticate(
     const auto &user = userNameAndPassword.first;
     if (user.empty()){throw std::invalid_argument("User is empty");}
     auto result = pImpl->mDatabase->authenticateBasic(userNameAndPassword);
+    if (result != IAuthenticator::Result::Authenticated)
+    {
+        return {result, std::nullopt};
+    }
     try
     {
         auto permissions = pImpl->mDatabase->getPermissions(user);
@@ -127,6 +131,7 @@ AuthNZ::authenticate(
 std::pair<IAuthenticator::Result, std::optional<JSONWebToken::Claims>>
 AuthNZ::authenticate(const std::string &jwt) const
 {
+    if (jwt.empty()){throw std::invalid_argument("JWT is empty");}
     return pImpl->mTokenAuthority->verify(jwt);
 }
 
@@ -135,6 +140,9 @@ bool AuthNZ::isAuthorized(const JSONWebToken::Claims &identity,
                           const std::string &schema,
                           const std::string &permission) noexcept
 {
+    // Strictly require you have a user at this point
+    if (identity.user.empty()){return false;}
+    // Check they have sufficient privilege for the route
     for (const auto &[grantedSchema, grantedPermission] :
          identity.permissions)
     {
@@ -147,6 +155,8 @@ bool AuthNZ::isAuthorized(const JSONWebToken::Claims &identity,
             {
                 return true;
             }
+            // Admins can read and write
+            if (grantedPermission == "admin"){return true;} 
         }
     }
     return false;

@@ -13,9 +13,12 @@
 #include <boost/property_tree/ptree_fwd.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include "uEventAnalysisToolBackend/database/credentials.hpp"
+#include "uEventAnalysisToolBackend/auth/databaseOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/jsonWebTokenOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
+#include "uEventAnalysisToolBackend/grpc/serverOptions.hpp"
+#include "uEventAnalysisToolBackend/grpc/grpcServerOptions.hpp"
 #include "otelOptions.hpp"
 
 #define APPLICATION_NAME "uEventAnalysisToolBackend"
@@ -104,6 +107,11 @@ struct ProgramOptions
             = UEAT::Database::Credentials::fromInitializationFile(
                  iniFile, "AQMS");
 
+        // Server grpc options
+        auto serverGRPCOptions
+            = UEAT::GRPC::GRPCServerOptions::fromInitializationFile(
+                 iniFile, "GRPCServer"); 
+
         // Backend database
         backendDatabaseCredentials
             = UEAT::Database::Credentials::fromInitializationFile(
@@ -128,6 +136,8 @@ struct ProgramOptions
     UEventAnalysisToolBackend::Auth::JSONWebTokenOptions jwtOptions;
     UEventAnalysisToolBackend::Auth::Password::HasherOptions passwordHasherOptions;
     UEventAnalysisToolBackend::Auth::Password::PasswordPolicy passwordPolicy;
+    UEventAnalysisToolBackend::Auth::DatabaseOptions authDatabaseOptions;
+    UEventAnalysisToolBackend::GRPC::ServerOptions mGRPCServerOptions;
     MapServerOptions mapServerOptions;
     std::string applicationName{APPLICATION_NAME};
     std::chrono::seconds printSummaryInterval

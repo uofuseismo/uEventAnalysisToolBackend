@@ -82,7 +82,8 @@ set(HEADER_FILES
     include/uEventAnalysisToolBackend/grpc/grpcServerOptions.hpp
     include/uEventAnalysisToolBackend/grpc/requestIdentifierInterceptor.hpp
     include/uEventAnalysisToolBackend/grpc/server.hpp
-    include/uEventAnalysisToolBackend/services/loginService.hpp
+    include/uEventAnalysisToolBackend/grpc/serverOptions.hpp
+    include/uEventAnalysisToolBackend/services/authService.hpp
     include/uEventAnalysisToolBackend/version.hpp
     )
 set(WILL_BE_DELETED_HEADER_FILES
@@ -113,7 +114,8 @@ set(LIBRARY_SRC
     lib/grpc/grpcServerOptions.cpp
     lib/grpc/requestIdentifierInterceptor.cpp
     lib/grpc/server.cpp
-    lib/services/loginService.cpp
+    lib/grpc/serverOptions.cpp
+    lib/services/authService.cpp
     lib/version.cpp
     )
 set(WILL_BE_DELETED_SRC
@@ -270,6 +272,7 @@ if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
                   testing/auth/password/passwordPolicy.cpp
                   testing/database/credentials.cpp
                   testing/database/aqms.cpp
+                  testing/grpc/grpcServerOptions.cpp
                   testing/grpc/requestIdentifierInterceptor.cpp
                   ${PROTO_SRC}
    )

@@ -19,6 +19,8 @@
 #include "uEventAnalysisToolBackend/auth/databaseOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/authenticator.hpp"
 #include "uEventAnalysisToolBackend/auth/password/hasher.hpp"
+///NOLINTNEXTLINE(misc-include-cleaner)
+#include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
 #include "uEventAnalysisToolBackend/database/credentials.hpp"
 
 using namespace UEventAnalysisToolBackend::Auth;
@@ -27,16 +29,17 @@ class Database::DatabaseImpl
 {
 public:
     DatabaseImpl(const DatabaseOptions &options,
-                 std::unique_ptr<Password::Hasher> &&hasher,
                  std::shared_ptr<spdlog::logger> logger) :
         mOptions(options),
-        mPasswordHasher(std::move(hasher)),
         mLogger(std::move(logger))
     {
         if (!mOptions.hasCredentials())
         {
             throw std::invalid_argument("Database credentials not set");
         }
+        mPasswordHasher
+            = std::make_unique<Password::Hasher>
+               (mOptions.getPasswordHasherOptions());
         if (mLogger == nullptr)
         {
             // NOLINTBEGIN(misc-include-cleaner)
@@ -510,8 +513,8 @@ public:
         return IAuthenticator::Result::ServerError;
     }
     DatabaseOptions mOptions;
-    std::unique_ptr<Password::Hasher> mPasswordHasher{nullptr};
     std::shared_ptr<spdlog::logger> mLogger{nullptr};
+    std::unique_ptr<Password::Hasher> mPasswordHasher{nullptr};
     mutable std::mutex mDatabaseMutex;
     std::unique_ptr<pqxx::connection> mConnection{nullptr};
 //    int mOperationsLimit{crypto_pwhash_OPSLIMIT_MODERATE}; 
@@ -521,10 +524,8 @@ public:
 
 /// Constructor
 Database::Database(const DatabaseOptions &options,
-                   std::unique_ptr<Password::Hasher> &&hasher,
                    std::shared_ptr<spdlog::logger> logger) :
     pImpl(std::make_unique<DatabaseImpl> (options,
-                                          std::move(hasher),
                                           std::move(logger)))
 {
 }

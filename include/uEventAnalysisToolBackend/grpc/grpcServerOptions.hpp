@@ -73,16 +73,15 @@ public:
     /// @brief Sets the maximum request message size in bytes.
     /// @throws std::invalid_argument if maxMessageSize is not positive.
     void setMaximumRequestMessageSizeInBytes(int maxMessageSize);
-    /// @result The maximum message size in bytes.
-    /// @note By default this is 65536.  Assuming about 100 bytes per station
-    ///       observation this is about 650 stations.
+    /// @result The maximum request message size in bytes.
+    /// @note By default this is 65536.
     [[nodiscard]] int getMaximumRequestMessageSizeInBytes() const noexcept;
 
     /// @brief Sets the maximum connection age.  After this amount of time
     ///        the connection is terminated.
     void setMaximumConnectionAge(const std::chrono::milliseconds &maxConnectionAge);
     /// @result The maximum connection age.
-    /// @note By default this is 2 minutes.
+    /// @note By default this is 3 minutes.
     [[nodiscard]] std::chrono::milliseconds getMaximumConnectionAge() const noexcept;
 
     /// @brief After the maximum connection age is hit, this is the amount of
@@ -92,6 +91,17 @@ public:
     ///         that look stale.
     /// @note By default this is 2 seconds.
     [[nodiscard]] std::chrono::milliseconds getMaximumConnectionAgeGracePeriod() const noexcept;
+
+    /// @brief Sets the maximum request identifier to be stored in 
+    ///        x-request-id header field.  After this point the
+    ///        x-request-id is considered invalid and overwritten
+    ///        with a UID.
+    /// @param[in] maxIdentifierSize  The max identifier size in bytes.
+    /// @throws std::invalid_argument if this is not in the range [1, 8192].
+    void setMaximumRequestIdentifierSizeInBytes(int maxIdentifierSize);
+    /// @result The maximum request identifier size in bytes.
+    /// @note By default this is 128.
+    [[nodiscard]] int getMaximumRequestIdentifierSizeInBytes() const noexcept;
 
     /// @brief Destructor
     ~GRPCServerOptions();
@@ -103,15 +113,15 @@ public:
     GRPCServerOptions& operator=(const GRPCServerOptions &options);
     /// @brief Move assignment.
     GRPCServerOptions& operator=(GRPCServerOptions &&options) noexcept;
+
+    /// @brief Loads the GRPC server options from an initialization file.
+    static GRPCServerOptions fromInitializationFile(
+        const std::filesystem::path &iniFile,
+        const std::string &section = "GRPCServer");
+
 private:
     class GRPCServerOptionsImpl;
     std::unique_ptr<GRPCServerOptionsImpl> pImpl;
 };
-
-/// @brief Generates the gRPC server options from an initialization file.
-[[nodiscard]] GRPCServerOptions fromInitializationFile(
-    const std::filesystem::path &iniFile,
-    const std::string &section = "GRPCServer");    
-
 }
 #endif

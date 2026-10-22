@@ -21,9 +21,9 @@
 //#include <uEventAnalysisToolAPI/auth/v1/service.grpc.pb.h>
 #include "uEventAnalysisToolBackend/auth/authNZ.hpp"
 #include "uEventAnalysisToolBackend/grpc/server.hpp"
+#include "uEventAnalysisToolBackend/grpc/serverOptions.hpp"
 #include "uEventAnalysisToolBackend/grpc/grpcServerOptions.hpp"
 #include "uEventAnalysisToolBackend/grpc/requestIdentifierInterceptor.hpp"
-#include "uEventAnalysisToolBackend/services/loginService.hpp"
 
 using namespace UEventAnalysisToolBackend::GRPC;
 
@@ -135,16 +135,37 @@ public:
 class Server::ServerImpl
 {
 public:
-    /// Run during construction
-    void createServices()
+    ServerImpl
+    (
+        const ServerOptions &serverOptions,
+        std::map<std::string, std::unique_ptr<grpc::Service>> &&servicesMap,
+        std::shared_ptr<spdlog::logger> logger
+    ) :
+        mServerOptions(serverOptions),
+        mLogger(std::move(logger)),
+        mServicesMap(std::move(servicesMap))
     {
-        std::unique_ptr<grpc::Service> loginService
-             = std::make_unique<UEventAnalysisToolBackend::Services::LoginService> (mAuthNZ, mLogger); 
-        mServicesMap.insert(std::pair {"LoginService", std::move(loginService)});
+        if (!mServerOptions.hasGRPCOptions())
+        {
+            throw std::invalid_argument("gRPC server options not set");
+        }
+        if (mServicesMap.empty())
+        {
+            throw std::invalid_argument("No services");
+        }
+        for (auto &service : mServicesMap)
+        {
+            if (service.second == nullptr)
+            {
+                throw std::invalid_argument(service.first + " is null");
+            }
+        }
     }
 
+    /// Run during construction
     void start()
     {
+        auto grpcOptions = mServerOptions.getGRPCOptions();
         // Interceptors
         std::vector
         <
@@ -154,7 +175,9 @@ public:
             >
         > creators;
         creators.push_back(
-             std::make_unique<::RequestIdentifierInterceptorFactory> (128));
+             std::make_unique<::RequestIdentifierInterceptorFactory>
+                 (grpcOptions.getMaximumRequestIdentifierSizeInBytes())
+        );
 
         grpc::ServerBuilder builder;
         builder.experimental().SetInterceptorCreators(std::move(creators));
@@ -202,18 +225,29 @@ public:
         stop();
     }
 //private:
-    std::shared_ptr<spdlog::logger> mLogger{nullptr};
-    std::shared_ptr<UEventAnalysisToolBackend::Auth::AuthNZ> mAuthNZ{nullptr};
-
+    ServerOptions mServerOptions;    
     // N.B. Services must outlive mServer (RegisterService keeps only a raw
     //      pointer).  This is guaranteed by declaration order: mServicesMap is
     //      declared before mServer, so it is destroyed after it.
     //      DO NOT reorder this map and the server.
     std::map<std::string, std::unique_ptr<grpc::Service>> mServicesMap;
+    std::shared_ptr<spdlog::logger> mLogger{nullptr};
+    // After mServicesMap
     std::unique_ptr<grpc::Server> mServer{nullptr};
-
     std::atomic<bool> mServerStarted{false};
 };
+
+/// Constructor
+Server::Server(
+        const ServerOptions &serverOptions,
+        std::map<std::string, std::unique_ptr<grpc::Service>> &&servicesMap,
+        std::shared_ptr<spdlog::logger> logger
+    ) :
+    pImpl(std::make_unique<ServerImpl> (serverOptions,
+                                        std::move(servicesMap),
+                                        std::move(logger)))
+{
+}
 
 /// Destructor
 Server::~Server() = default;

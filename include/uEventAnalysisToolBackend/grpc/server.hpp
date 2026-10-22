@@ -1,7 +1,9 @@
 #ifndef UEVENT_ANALYSIS_TOOL_BACKEND_GRPC_SERVER_HPP
 #define UEVENT_ANALYSIS_TOOL_BACKEND_GRPC_SERVER_HPP
+#include <map>
 #include <memory>
 #include <spdlog/logger.h>
+#include <grpcpp/impl/service_type.h>
 
 namespace UEventAnalysisToolBackend::Auth
 {
@@ -21,7 +23,7 @@ class Server
 {
 public:
     Server(const ServerOptions &options,
-           std::shared_ptr<UEventAnalysisToolBackend::Auth::AuthNZ> authNZ,
+           std::map<std::string, std::unique_ptr<grpc::Service>> &&servicesMap,
            std::shared_ptr<spdlog::logger> logger);
 
 

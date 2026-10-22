@@ -2,6 +2,7 @@
 #include <stdexcept>
 #include <utility>
 #include "uEventAnalysisToolBackend/auth/databaseOptions.hpp"
+#include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
 #include "uEventAnalysisToolBackend/database/credentials.hpp"
 
 using namespace UEventAnalysisToolBackend::Auth;
@@ -10,6 +11,7 @@ class DatabaseOptions::DatabaseOptionsImpl
 {
 public:
     UEventAnalysisToolBackend::Database::Credentials mCredentials; 
+    Password::HasherOptions mPasswordHasherOptions;
     bool mHasCredentials{false};
 };
 
@@ -83,4 +85,17 @@ DatabaseOptions::getCredentials() const
 bool DatabaseOptions::hasCredentials() const noexcept
 {
     return pImpl->mHasCredentials;
+}
+
+/// Password hasher options
+void DatabaseOptions::setPasswordHasherOptions(
+    const Password::HasherOptions &options)
+{
+    pImpl->mPasswordHasherOptions = options;
+}
+
+Password::HasherOptions 
+DatabaseOptions::getPasswordHasherOptions() const noexcept
+{
+    return pImpl->mPasswordHasherOptions;
 }

@@ -192,3 +192,30 @@ TEST_CASE("UEventAnalysisToolBackend::GRPC::authorizationHeaderToToken",
         requireUnauthenticated(bearer("Token " + token));
     }
 }
+
+// Pending: these document checks not yet in the parser.  Drop [!mayfail]
+// once they are.
+TEST_CASE("UEventAnalysisToolBackend::GRPC::parseAuthorizationHeader stricter checks",
+          "[parseAuthorizationHeader][!mayfail]")
+{
+    SECTION("A token with whitespace inside is rejected")
+    {
+        requireUnauthenticated(bearer("Bearer aaaa.bb bb.cccc"));
+    }
+    SECTION("A user name with control characters is rejected")
+    {
+        // sam<TAB>i-am:x
+        requireUnauthenticated(basic("Basic c2FtCWktYW06eA=="));
+        // sam<NUL>i-am:x
+        requireUnauthenticated(basic("Basic c2FtAGktYW06eA=="));
+        // sam-i-am<DEL>:x
+        requireUnauthenticated(basic("Basic c2FtLWktYW1/Ong="));
+    }
+    SECTION("A password may still contain control characters")
+    {
+        // sam-i-am:pass<TAB>word
+        const auto result = basic("Basic c2FtLWktYW06cGFzcwl3b3Jk");
+        REQUIRE(result.has_value());
+        REQUIRE(result->second == "pass\tword");
+    }
+}

@@ -144,6 +144,20 @@ UEventAnalysisToolBackend::GRPC::authorizationHeaderToUserNameAndPassword(
     }
 
     std::string user{decoded->substr(0, colon)};
+    if (std::ranges::any_of(user,
+                            [](const char c)
+                            {
+                                return std::iscntrl(
+                                    static_cast<unsigned char> (c)) != 0;
+                            }))
+    {
+        return std::unexpected(
+            grpc::Status
+            {
+                grpc::StatusCode::UNAUTHENTICATED,
+                "User name cannot contain control characters"
+            });
+    }
     std::string password{decoded->substr(colon + 1)}; 
     return std::pair{ std::move(user), std::move(password) };
 }
@@ -202,6 +216,21 @@ UEventAnalysisToolBackend::GRPC::authorizationHeaderToToken(
             {
                 grpc::StatusCode::UNAUTHENTICATED,
                 "Empty JSON web token"
+            });
+    }
+
+    if (std::ranges::any_of(rest,
+                            [](const char c)
+                            {
+                                return std::isspace(
+                                    static_cast<unsigned char> (c)) != 0;
+                            }))
+    {
+        return std::unexpected(
+            grpc::Status
+            {
+                grpc::StatusCode::UNAUTHENTICATED,
+                "JSON web token cannot contain whitespace"
             });
     }
     return std::string{rest};

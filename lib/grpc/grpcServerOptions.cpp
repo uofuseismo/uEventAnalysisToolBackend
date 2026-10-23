@@ -98,12 +98,11 @@ std::string GRPCServerOptions::getHost() const noexcept
     return pImpl->mHost;
 }
 
-/*
-std::string UDataPacketService::makeAddress(const GRPCServerOptions &options)
+std::string GRPCServerOptions::getAddress() const noexcept
 {
-    return options.getHost() + ":" + std::to_string(options.getPort());
+    auto address = getHost();
+    return address.append(":").append(std::to_string(getPort()));
 }
-*/
 
 /// Port
 void GRPCServerOptions::setPort(const uint16_t port)

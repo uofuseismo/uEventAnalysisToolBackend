@@ -86,6 +86,7 @@ set(HEADER_FILES
     include/uEventAnalysisToolBackend/grpc/serverOptions.hpp
     include/uEventAnalysisToolBackend/grpc/toRequestIdentifier.hpp
     include/uEventAnalysisToolBackend/grpc/validateClientAccessToken.hpp
+    include/uEventAnalysisToolBackend/services/adminService.hpp
     include/uEventAnalysisToolBackend/services/authService.hpp
     include/uEventAnalysisToolBackend/version.hpp
     )
@@ -121,6 +122,7 @@ set(LIBRARY_SRC
     lib/grpc/serverOptions.cpp
     lib/grpc/toRequestIdentifier.cpp
     lib/grpc/validateClientAccessToken.cpp
+    lib/services/adminService.cpp
     lib/services/authService.cpp
     lib/version.cpp
     )

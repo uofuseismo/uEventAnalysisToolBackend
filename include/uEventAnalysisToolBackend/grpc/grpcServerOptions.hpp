@@ -31,6 +31,11 @@ public:
     /// @note By default this is 50000.
     [[nodiscard]] uint16_t getPort() const noexcept;
 
+    /// @brief Convenience function that combines the host and port into a
+    ///        gRPC address - i.e., host:post
+    /// @reuslt The gRPC address.
+    [[nodiscard]] std::string getAddress() const noexcept; 
+
     /// @brief Sets the API access token.
     //void setAccessToken(const std::string &token);
     /// @result The access token.

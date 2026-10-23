@@ -12,9 +12,11 @@
 #endif
 #include <spdlog/spdlog.h>
 #include <spdlog/logger.h>
+#include <grpcpp/security/server_credentials.h>
 #include <grpcpp/server_builder.h>
 #include <grpcpp/support/interceptor.h>
 #include <grpcpp/support/server_interceptor.h>
+#include <grpcpp/impl/channel_argument_option.h>
 //#include <grpcpp/support/string_ref.h>
 #include <grpcpp/support/time.h> //NOLINT
 //#include <uEventAnalysisToolAPI/admin/v1/service.grpc.pb.h>
@@ -160,11 +162,17 @@ public:
                 throw std::invalid_argument(service.first + " is null");
             }
         }
+        mInitialized = true;
     }
 
     /// Run during construction
     void start()
     {
+        if (!mInitialized)
+        {
+            throw std::runtime_error("Server not initialized");
+        }
+
         auto grpcOptions = mServerOptions.getGRPCOptions();
         // Interceptors
         std::vector
@@ -182,9 +190,37 @@ public:
         grpc::ServerBuilder builder;
         builder.experimental().SetInterceptorCreators(std::move(creators));
         // TODO add global rules like messages size limits etc and GRPC_ARG_MAX_METADATA_SIZE.
-
+        builder.SetOption(grpc::MakeChannelArgumentOption(
+               "GRPC_ARG_MAX_CONNECTION_AGE_MS",
+               static_cast<int>
+                   (grpcOptions.getMaximumConnectionAge().count())));
+        builder.SetOption(grpc::MakeChannelArgumentOption(
+               "GRPC_ARG_MAX_CONNECTION_AGE_GRACE_MS",
+               static_cast<int>
+                   (grpcOptions.getMaximumConnectionAgeGracePeriod().count())));
         // TODO add listening port and address and load in the certs
-
+        auto address = grpcOptions.getAddress(); 
+        if (grpcOptions.hasServerCertificate() && grpcOptions.hasServerKey())
+        {
+            auto serverCertificate = grpcOptions.getServerCertificate();
+            auto serverKey = grpcOptions.getServerKey();
+            SPDLOG_LOGGER_INFO(mLogger, "Initiating secured backend");
+            const grpc::SslServerCredentialsOptions::PemKeyCertPair keyCertPair
+            {
+                serverKey,
+                serverCertificate
+            };
+            grpc::SslServerCredentialsOptions sslOptions;
+            sslOptions.pem_key_cert_pairs.emplace_back(keyCertPair);
+            builder.AddListeningPort(address,
+                                     grpc::SslServerCredentials(sslOptions));
+        }
+        else
+        {
+            SPDLOG_LOGGER_INFO(mLogger, "Initiating non-secured backend");
+            builder.AddListeningPort(address,
+                                     grpc::InsecureServerCredentials());
+        }
         // Register before start
         for (auto &service : mServicesMap)
         {
@@ -235,6 +271,7 @@ public:
     // After mServicesMap
     std::unique_ptr<grpc::Server> mServer{nullptr};
     std::atomic<bool> mServerStarted{false};
+    bool mInitialized{false};
 };
 
 /// Constructor

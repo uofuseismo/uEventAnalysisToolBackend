@@ -193,10 +193,9 @@ TEST_CASE("UEventAnalysisToolBackend::GRPC::authorizationHeaderToToken",
     }
 }
 
-// Pending: these document checks not yet in the parser.  Drop [!mayfail]
-// once they are.
+// Stricter checks on the token and the user name.
 TEST_CASE("UEventAnalysisToolBackend::GRPC::parseAuthorizationHeader stricter checks",
-          "[parseAuthorizationHeader][!mayfail]")
+          "[parseAuthorizationHeader]")
 {
     SECTION("A token with whitespace inside is rejected")
     {

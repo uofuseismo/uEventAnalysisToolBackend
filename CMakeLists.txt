@@ -139,7 +139,13 @@ set(WILL_BE_DELETED_SRC
     lib/database/aqms/stationDurationMagnitude.cpp
     )
 set(PROTO_SRC
-    #uEventAnalysisToolAPI/admin/v1/service.proto
+    uEventAnalysisToolAPI/admin/v1/delete_user_request.proto
+    uEventAnalysisToolAPI/admin/v1/delete_user_response.proto
+    uEventAnalysisToolAPI/admin/v1/login_with_password_request.proto
+    uEventAnalysisToolAPI/admin/v1/login_with_password_response.proto
+    uEventAnalysisToolAPI/admin/v1/reset_password_request.proto
+    uEventAnalysisToolAPI/admin/v1/reset_password_response.proto
+    uEventAnalysisToolAPI/admin/v1/service.proto
     uEventAnalysisToolAPI/auth/v1/change_password_request.proto
     uEventAnalysisToolAPI/auth/v1/change_password_response.proto
     uEventAnalysisToolAPI/auth/v1/login_with_password_request.proto

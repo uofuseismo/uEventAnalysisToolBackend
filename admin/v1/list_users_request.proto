@@ -1,0 +1,11 @@
+edition = "2023";
+
+package UEventAnalysisToolAPI.Auth.V1;
+
+/**
+ * Requests a list of users in the system.
+ */
+message ListUsersRequest {
+
+}
+

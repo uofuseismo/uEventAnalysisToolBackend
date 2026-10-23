@@ -10,7 +10,7 @@ import "uEventAnalysisToolAPI/auth/v1/get_password_requirements_request.proto";
 import "uEventAnalysisToolAPI/auth/v1/password_requirements.proto";
 
 /**
- * Handles a basic login requests for a user.  
+ * Handles a basic login requests and credentials management for a user.
  */
 service AuthService {
    // Allows the user to change their password.  This requires the original

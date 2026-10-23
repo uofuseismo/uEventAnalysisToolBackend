@@ -2,6 +2,10 @@ edition = "2023";
 
 package UEventAnalysisToolAPI.Admin.V1;
 
+import "uEventAnalysisToolAPI/admin/v1/list_users_request.proto";
+import "uEventAnalysisToolAPI/admin/v1/list_users_response.proto";
+import "uEventAnalysisToolAPI/admin/v1/login_with_password_request.proto"; 
+import "uEventAnalysisToolAPI/admin/v1/login_with_password_response.proto";
 //import "uEventAnalysisToolAPI/v1/userSettings/add_key_request.proto";
 //import "uEventAnalysisToolAPI/v1/userSettings/add_key_response.proto";
 //import "uEventAnalysisToolAPI/v1/userSettings/list_keys_request.proto";
@@ -13,6 +17,11 @@ package UEventAnalysisToolAPI.Admin.V1;
  * Facilitates user management by administrators.
  */
 service AdminService {
+   // Lists the users.
+   rpc ListUsers(ListUsersRequest) returns(ListUsersResponse) {}; 
+   // Allows a user to step-up privileges to admin and execute the other
+   // RPCs in this serivce.
+   rpc LoginWithPassword(LoginWithPasswordRequest) returns(LoginWithPasswordResponse) {};
    // Allows user to list their keys.  
    //rpc ListKeys(ListKeysRequest) returns(ListKeysResponse) {}; 
    // Allows user to delete a key (invalidates but does not delete the key).

@@ -1,0 +1,15 @@
+edition = "2023";
+
+package UEventAnalysisToolAPI.Admin.V1;
+
+/**
+ * Response to a (provisional) user create request.
+ */
+message CreateUserResponse {
+   /// The user name.
+   string user = 1;
+   /// The user's temporary password.
+   string temporary_password = 2;
+   /// Supplemental information related to the request.
+   string details = 3 [default = ""];
+}

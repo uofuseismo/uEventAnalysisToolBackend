@@ -2,6 +2,8 @@ edition = "2023";
 
 package UEventAnalysisToolAPI.Admin.V1;
 
+import "uEventAnalysisToolAPI/admin/v1/create_user_request.proto";
+import "uEventAnalysisToolAPI/admin/v1/create_user_response.proto";
 import "uEventAnalysisToolAPI/admin/v1/delete_user_request.proto";
 import "uEventAnalysisToolAPI/admin/v1/delete_user_response.proto";
 import "uEventAnalysisToolAPI/admin/v1/list_users_request.proto";

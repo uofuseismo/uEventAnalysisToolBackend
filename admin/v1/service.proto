@@ -33,8 +33,8 @@ service AdminService {
    // Deletes a user.
    rpc DeleteUser(DeleteUserRequest) returns(DeleteUserResponse) {}; 
    // Resets a user's password.
-/*
    rpc ResetPassword(ResetPasswordRequest) returns(ResetPasswordResponse) {}; 
+/*
    // Sets a user as an administrator.
    rpc SetAdministrator(SetAdministratorRequest) returns(SetAdministratorResponse) {};
    // Sets a user's permissions.

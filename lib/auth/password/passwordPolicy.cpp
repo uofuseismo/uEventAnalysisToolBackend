@@ -1,8 +1,13 @@
+#include <algorithm>
 #include <filesystem>
+#include <iterator>
 #include <memory>
+#include <random>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
+#include <vector>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ptree_fwd.hpp>
 #include <boost/property_tree/ini_parser.hpp>
@@ -10,6 +15,19 @@
 #include <uEventAnalysisToolAPI/auth/v1/password_requirements.pb.h>
 
 using namespace UEventAnalysisToolBackend::Auth::Password;
+
+namespace
+{
+// Avoid 1's and I's end l's and 0's and O's because that's confusing because that's confusing.  
+
+constexpr std::string_view ALPHABET{
+    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz"};
+constexpr std::string_view NUMBERS{
+    "23456789"};
+constexpr std::string_view SPECIAL {
+    "*@#[]$!"};
+
+}
 
 class PasswordPolicy::PasswordPolicyImpl
 {
@@ -122,6 +140,100 @@ void PasswordPolicy::disableNewAndOldPasswordMustDiffer() noexcept
 bool PasswordPolicy::newAndOldPasswordMustDiffer() const noexcept
 {
     return pImpl->mNewAndOldPasswordMustBeDifferent;
+}
+
+/// Creates a temporary password based on the current policy.
+std::string PasswordPolicy::createTemporaryPassword() const noexcept
+{
+    auto [candidateMinimumLength, candidateMaximumLength]
+         = getMinimumAndMaximumLength();
+    int passwordLength{candidateMinimumLength};
+    if (requiresNumber())
+    {
+        if (passwordLength + 1 <= candidateMaximumLength)
+        {
+            passwordLength = passwordLength + 1;
+        }
+    }
+    if (requiresSpecialCharacter())
+    {
+        if (passwordLength + 1 <= candidateMaximumLength)
+        {
+            passwordLength = passwordLength + 1;
+        }
+    }
+    // Initialize our RNG
+    std::random_device device;
+    std::mt19937 generator(device());
+    // First generate a list of random characters
+    std::uniform_int_distribution<>
+        alphabetDistribution(0, static_cast<int> (::ALPHABET.size()));
+    std::string password;
+    std::vector<int> isChangeableIndex(passwordLength);
+    for (int i = 0; i < passwordLength; ++i)
+    {
+        auto j = alphabetDistribution(generator);
+        password.push_back(::ALPHABET[j]);
+        isChangeableIndex[i] = i;
+    }
+    // Designate one survivor
+    std::vector<int> survivorIndex;
+    survivorIndex.reserve(1);
+    std::ranges::sample(isChangeableIndex,
+                        std::back_inserter(survivorIndex),
+                        1,
+                        generator); 
+    std::erase(isChangeableIndex, survivorIndex.at(0));
+    // This password has to survive for like 2 days.  Let's not go crazy.
+    int nChange{1};
+    if (requiresNumber())
+    {
+        if (isChangeableIndex.size() > 1)
+        {
+            std::vector<int> samples;
+            samples.reserve(nChange);
+            std::ranges::sample(isChangeableIndex,
+                                std::back_inserter(samples),
+                                nChange,
+                                generator); 
+            std::uniform_int_distribution<>
+                numberDistribution(0, static_cast<int> (::NUMBERS.size()));
+            for (auto s : samples)
+            {
+                auto j = numberDistribution(generator);
+                password[s] = ::NUMBERS[j];
+            } 
+            for (auto s : samples)
+            {
+                std::erase(isChangeableIndex, s); 
+            }
+        }
+    }
+    nChange = 1;
+    if (requiresSpecialCharacter())
+    {
+        if (isChangeableIndex.size() > 1)
+        {
+            std::vector<int> samples;
+            samples.reserve(nChange);
+            std::ranges::sample(isChangeableIndex,
+                                std::back_inserter(samples),
+                                nChange,
+                                generator); 
+            std::uniform_int_distribution<>
+                specialDistribution(0, static_cast<int> (::SPECIAL.size()));
+            for (auto s : samples)
+            {   
+                auto j = specialDistribution(generator);
+                password[s] = ::SPECIAL[j];
+            }
+            for (auto s : samples)
+            {
+                std::erase(isChangeableIndex, s);
+            }
+        }
+    }
+    return password;
 }
 
 /// Conversions

@@ -58,6 +58,9 @@ public:
     /// @note By default this is true.
     [[nodiscard]] bool newAndOldPasswordMustDiffer() const noexcept; 
 
+    /// @brief Utility to create a random password based on the current rules.
+    [[nodiscard]] std::string createTemporaryPassword() const noexcept;
+
     /// @brief Creates the user password policy from an initialization file.
     /// @throws std::invalid_argument if the ini file path does not exist.
     [[nodiscard]] static PasswordPolicy fromInitializationFile(const std::filesystem::path &path, const std::string &section = "UserPasswordPolicy");

@@ -56,6 +56,7 @@ public:
     std::shared_ptr<spdlog::logger> mLogger{nullptr};
 };
 
+/*
 /// Constructor
 AuthService::AuthService
     (
@@ -67,6 +68,7 @@ AuthService::AuthService
     UEventAnalysisToolAPI::Auth::V1::AuthService::CallbackService {}
 {
 } 
+*/
 
 grpc::ServerUnaryReactor
 *AuthService::LoginWithPassword(

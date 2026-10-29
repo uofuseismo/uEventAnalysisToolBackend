@@ -15,6 +15,8 @@
 #include "uEventAnalysisToolBackend/database/credentials.hpp"
 #include "uEventAnalysisToolBackend/auth/databaseOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/jsonWebTokenOptions.hpp"
+#include "uEventAnalysisToolBackend/auth/loginAuthorityOptions.hpp"
+#include "uEventAnalysisToolBackend/auth/tokenVerifierOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
 #include "uEventAnalysisToolBackend/grpc/serverOptions.hpp"
@@ -113,10 +115,28 @@ struct ProgramOptions
                  iniFile, "GRPCServer"); 
 
         // Backend database
-        backendDatabaseCredentials
+        //backendDatabaseCredentials
+        //    = UEAT::Database::Credentials::fromInitializationFile(
+        //         iniFile, "Database");
+/* 
+        adminLoginAuthorityDatabaseCredentials
             = UEAT::Database::Credentials::fromInitializationFile(
-                 iniFile, "Database");
- 
+                 iniFile, "AdminLoginAuthority");
+*/
+        adminLoginAuthorityOptions
+            = UEAT::Auth::LoginAuthorityOptions::fromInitializationFile(
+                 iniFile, "AdminLoginAuthority", std::chrono::minutes {10},
+                 applicationName + "-admin-authority");
+/*
+        userLoginAuthorityDatabaseCredentials
+            = UEAT::Database::Credentials::fromInitializationFile(
+                 iniFile, "UserLoginAuthority");
+*/
+        userLoginAuthorityOptions
+            = UEAT::Auth::LoginAuthorityOptions::fromInitializationFile(
+                 iniFile, "UserLoginAuthority", std::chrono::minutes {180},
+                 applicationName + "-user-authority");
+
         jwtOptions
             = UEAT::Auth::JSONWebTokenOptions::fromInitializationFile(
                  iniFile, "Authentication");
@@ -132,8 +152,12 @@ struct ProgramOptions
     UEventAnalysisToolBackend::OTelOptions::HTTPLog otelHTTPLogOptions;
     UEventAnalysisToolBackend::OTelOptions::GRPCMetrics otelGRPCMetricsOptions;
     UEventAnalysisToolBackend::OTelOptions::GRPCLog otelGRPCLogOptions;
-    UEventAnalysisToolBackend::Database::Credentials backendDatabaseCredentials;
+    //UEventAnalysisToolBackend::Database::Credentials backendDatabaseCredentials;
     UEventAnalysisToolBackend::Auth::JSONWebTokenOptions jwtOptions;
+    UEventAnalysisToolBackend::Auth::LoginAuthorityOptions adminLoginAuthorityOptions;
+    //UEventAnalysisToolBackend::Database::Credentials adminLoginAuthorityDatabaseCredentials;
+    UEventAnalysisToolBackend::Auth::LoginAuthorityOptions userLoginAuthorityOptions;
+    //UEventAnalysisToolBackend::Database::Credentials userLoginAuthorityDatabaseCredentials;
     UEventAnalysisToolBackend::Auth::Password::HasherOptions passwordHasherOptions;
     UEventAnalysisToolBackend::Auth::Password::PasswordPolicy passwordPolicy;
     UEventAnalysisToolBackend::Auth::DatabaseOptions authDatabaseOptions;

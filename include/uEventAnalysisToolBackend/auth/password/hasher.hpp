@@ -52,6 +52,16 @@ public:
     ///         should be rehashed.
     [[nodiscard]] bool needsRehash(const std::string &encodedHash) const;
 
+    /// @brief Verify a presented password with against a hashed password
+    ///        in the database.
+    /// @param[in] presentedPassword     The password a user presents via the
+    ///                                  Basic credentials.
+    /// @param[in] storedHashedPassword  The password stored in a database in a
+    ///                                  hashed format.
+    /// @result True indicates that the passwords match.
+    [[nodiscard]] static bool verify(const std::string &presentedPassword,
+                                     const std::string &storedHashedPassword) noexcept;
+
     /// @brief Copy assignment.
     Hasher& operator=(const Hasher &hasher);
     /// @brief Move assignment.

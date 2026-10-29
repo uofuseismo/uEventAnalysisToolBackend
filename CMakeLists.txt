@@ -68,6 +68,8 @@ configure_file(${CMAKE_SOURCE_DIR}/lib/version.hpp.in
                ${CMAKE_SOURCE_DIR}/include/uEventAnalysisToolBackend/version.hpp)
 
 set(HEADER_FILES
+    include/uEventAnalysisToolBackend/auth/administratorLoginAuthority.hpp
+    include/uEventAnalysisToolBackend/auth/administratorTokenVerifier.hpp
     include/uEventAnalysisToolBackend/auth/authenticator.hpp
     include/uEventAnalysisToolBackend/auth/authNZ.hpp
     include/uEventAnalysisToolBackend/auth/database.hpp
@@ -75,6 +77,10 @@ set(HEADER_FILES
     include/uEventAnalysisToolBackend/auth/grpc.hpp
     include/uEventAnalysisToolBackend/auth/jsonWebToken.hpp
     include/uEventAnalysisToolBackend/auth/jsonWebTokenOptions.hpp
+    include/uEventAnalysisToolBackend/auth/loginAuthority.hpp
+    include/uEventAnalysisToolBackend/auth/loginAuthorityOptions.hpp
+    #include/uEventAnalysisToolBackend/auth/tokenVerifier.hpp
+    include/uEventAnalysisToolBackend/auth/tokenVerifierOptions.hpp
     include/uEventAnalysisToolBackend/auth/password/hasher.hpp
     include/uEventAnalysisToolBackend/auth/password/hasherOptions.hpp
     include/uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp
@@ -104,6 +110,8 @@ set(WILL_BE_DELETED_HEADER_FILES
     include/uEventAnalysisToolBackend/database/aqms/stationDurationMagnitude.hpp
     include/uEventAnalysisToolBackend/database/aqms/streamIdentifier.hpp)
 set(LIBRARY_SRC
+    lib/auth/administratorLoginAuthority.cpp
+    lib/auth/administratorTokenVerifier.cpp
     lib/auth/authenticator.cpp
     lib/auth/authNZ.cpp
     lib/auth/database.cpp
@@ -111,6 +119,11 @@ set(LIBRARY_SRC
     lib/auth/grpc.cpp
     lib/auth/jsonWebToken.cpp
     lib/auth/jsonWebTokenOptions.cpp
+    lib/auth/loginAuthority.cpp
+    lib/auth/loginAuthorityOptions.cpp
+    lib/auth/userTokenVerifier.cpp
+    #lib/auth/tokenVerifier.cpp
+    lib/auth/tokenVerifierOptions.cpp
     lib/auth/password/hasher.cpp
     lib/auth/password/hasherOptions.cpp
     lib/auth/password/passwordPolicy.cpp
@@ -188,11 +201,14 @@ target_include_directories(libuEventAnalysisToolBackend
                           )
 target_link_libraries(libuEventAnalysisToolBackend
                       PUBLIC gRPC::grpc++
-                      PRIVATE protobuf::libprotobuf gRPC::grpc
+                             spdlog::spdlog_header_only
+                      PRIVATE protobuf::libprotobuf
+                              gRPC::grpc
                               jwt-cpp::jwt-cpp
                               libpqxx::pqxx
-                              spdlog::spdlog_header_only
-                              Boost::headers Boost::json Boost::program_options
+                              Boost::headers
+                              Boost::json
+                              Boost::program_options
                               libsodium::libsodium
                               Threads::Threads)
 target_sources(libuEventAnalysisToolBackend
@@ -278,12 +294,15 @@ endif()
 ##########################################################################################
 if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
    add_executable(unitTests
-                  testing/auth/jsonWebToken.cpp
-                  testing/auth/authNZ.cpp
+                  #testing/auth/jsonWebToken.cpp
+                  #testing/auth/authNZ.cpp
                   testing/auth/grpc.cpp
+                  testing/auth/databaseReconnect.cpp
                   testing/auth/password/hasher.cpp
                   testing/auth/password/hasherOptions.cpp
                   testing/auth/password/passwordPolicy.cpp
+                  testing/auth/tokenVerifierOptions.cpp
+                  testing/auth/tokenVerifiers.cpp
                   testing/database/credentials.cpp
                   testing/database/aqms.cpp
                   testing/grpc/grpcServerOptions.cpp
@@ -303,6 +322,7 @@ if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
                             spdlog::spdlog_header_only
                             gRPC::grpc gRPC::grpc++
                             Threads::Threads
+                            jwt-cpp::jwt-cpp Boost::json libpqxx::pqxx
                             Catch2::Catch2 Catch2::Catch2WithMain)
    target_include_directories(unitTests
                               PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>)

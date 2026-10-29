@@ -123,3 +123,16 @@ bool Hasher::needsRehash(const std::string &encodedHash) const
     throw std::runtime_error("Failed to parse hash");
 }
 
+/// Verify a hashed password against a stored password.
+bool Hasher::verify(const std::string &password,
+                    const std::string &hashedPassword) noexcept
+{
+    if (crypto_pwhash_str_verify(hashedPassword.c_str(),
+                                 password.c_str(),
+                                 password.length()) == 0)
+    {
+        return true;
+    }
+    return false;
+}
+

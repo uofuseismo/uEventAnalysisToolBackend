@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cstring>
 #include <exception>
 #include <memory>
@@ -6,6 +7,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 #include <spdlog/spdlog.h>
@@ -55,15 +57,22 @@ public:
         mInitialized = isConnected();
     }
 
-    /// @brief Connect to the database
+    /// @brief Connect to the database.
     void connect()
     {
-        disconnect();
+        const std::scoped_lock lock(mDatabaseMutex);
+        connectLocked();
+    }
+
+    /// @brief Connect to the database
+    /// @note The calling function must own the mutex.
+    void connectLocked()
+    {
+        disconnectLocked();
         const auto &credentials = mOptions.getCredentials();
         auto connectionString = credentials.getConnectionString();
         auto schema = credentials.getSchema();
-        {
-        const std::scoped_lock lock(mDatabaseMutex);
+        
         mConnection = std::make_unique<pqxx::connection> (connectionString);
         if (mConnection)
         {
@@ -94,7 +103,6 @@ public:
                                    + credentials.getDatabaseName()
                                    + " at " + credentials.getHost());
         }
-        }
         SPDLOG_LOGGER_INFO(mLogger, 
                            "Connected to {} at {}",
                            credentials.getDatabaseName(),
@@ -105,6 +113,13 @@ public:
     void disconnect()
     {
         const std::scoped_lock lock(mDatabaseMutex);
+        disconnectLocked();
+    }
+
+    /// @brief Disconnect from the database
+    /// @note Caller must hold mDatabaseMutex.
+    void disconnectLocked()
+    {
         if (mConnection)
         {
             mConnection->close();
@@ -124,40 +139,72 @@ public:
         return false; 
     }
 
-    /// @brief Checks the connection and reconnects if necessary.
-    void checkConnection()
+    /// @brief Runs f(transaction) under the lock.  On a broken connection,
+    ///        reconnects and retries once.  f must commit.
+    template<typename F>
+    decltype(auto) withTransaction(F &&f)
     {
-        if (!isConnected())
+        const std::vector<std::chrono::seconds> 
+           retrySchedule({
+                          std::chrono::seconds {0},
+                          std::chrono::seconds {5},
+                          std::chrono::seconds {15}
+                         });
+        const std::scoped_lock lock(mDatabaseMutex);
+        for (int attempt = 0;
+             attempt < static_cast<int> (retrySchedule.size());
+             ++attempt)
         {
-            connect();
-            if (!isConnected())
+            try
             {
-                throw std::runtime_error("Could not connect to database");
+                if (!mConnection || !mConnection->is_open())
+                {
+                    connectLocked();  // connect() minus its own locking
+                }
+                pqxx::work transaction(*mConnection);
+                return f(transaction);
+            }
+            catch (const pqxx::broken_connection &e)
+            {
+                mConnection.reset();
+                if (attempt < static_cast<int> (retrySchedule.size()) - 1)
+                {
+                    auto waitFor = retrySchedule[attempt + 1];
+                    SPDLOG_LOGGER_WARN(mLogger,
+                    "Lost database connection ({}); reconnecting in {} seconds",
+                    e.what(), waitFor.count());
+                    std::this_thread::sleep_for(waitFor);
+                }
             }
         }
+        SPDLOG_LOGGER_WARN(mLogger,
+                           "Max reconnection attempts of {} hit",
+                            retrySchedule.size());
+        throw std::runtime_error("Database connection error");
     }
 
     /// @brief Updates the user password.
     /// @result True on success; false if the user does not exist.
-    [[nodiscard]] bool updatePassword(const std::pair<std::string, std::string> &userAndPassword)
+    [[nodiscard]] bool updatePassword(
+        const std::pair<std::string, std::string> &userAndPassword)
     {
         const auto &user = userAndPassword.first;
         if (user.empty()){throw std::invalid_argument("User is empty");}
-        checkConnection();
         const auto &password = userAndPassword.second;
         if (password.empty()){throw std::invalid_argument("Password is empty");}
+        // Hash outside the transaction: it is slow and needn't be redone
+        // on a retry.
         auto hashedPassword = mPasswordHasher->hash(password);
         constexpr std::string_view query{"SELECT auth.update_user_password($1, $2)"};
         const pqxx::params parameters{user, hashedPassword};
-        bool success{false};
-        {
-        const std::scoped_lock lock(mDatabaseMutex);
-        pqxx::work transaction(*mConnection);
-        auto row = transaction.exec(query, parameters).one_row();
-        success = row.at(0).as<bool> ();
-        transaction.commit();
-        }
-        return success;
+        return withTransaction(
+            [&](pqxx::work &transaction) -> bool
+            {
+                auto row = transaction.exec(query, parameters).one_row();
+                const auto success = row.at(0).as<bool> ();
+                transaction.commit();
+                return success;
+            });
     }
 
     /// @brief Adds a user.
@@ -166,21 +213,19 @@ public:
     {
         const auto &user = userAndPassword.first;
         if (user.empty()){throw std::invalid_argument("User is empty");}
-        checkConnection();
         const auto &password = userAndPassword.second;
         if (password.empty()){throw std::invalid_argument("Password is empty");}
         auto hashedPassword = mPasswordHasher->hash(password);
         constexpr std::string_view query{"SELECT auth.add_user($1, $2)"};
         const pqxx::params parameters{user, hashedPassword};
-        bool success{false};
-        {
-        const std::scoped_lock lock(mDatabaseMutex);
-        pqxx::work transaction(*mConnection);
-        auto row = transaction.exec(query, parameters).one_row();
-        success = row.at(0).as<bool> ();
-        transaction.commit();
-        }
-        return success;
+        return withTransaction(
+            [&](pqxx::work &transaction) -> bool
+            {
+                auto row = transaction.exec(query, parameters).one_row();
+                const auto success = row.at(0).as<bool> ();
+                transaction.commit();
+                return success;
+            });
     }
 
     /// @brief Removes a user.
@@ -188,18 +233,16 @@ public:
     [[nodiscard]] bool removeUser(const std::string &user)
     {
         if (user.empty()){throw std::invalid_argument("User is empty");}
-        checkConnection();
         constexpr std::string_view query{"SELECT auth.remove_user($1)"};
         const pqxx::params parameters{user};
-        bool success{false};
-        {
-        const std::scoped_lock lock(mDatabaseMutex);
-        pqxx::work transaction(*mConnection);
-        auto row = transaction.exec(query, parameters).one_row();
-        success = row.at(0).as<bool> ();
-        transaction.commit();
-        }
-        return success;
+        return withTransaction(
+            [&](pqxx::work &transaction) -> bool
+            {
+                auto row = transaction.exec(query, parameters).one_row();
+                const auto success = row.at(0).as<bool> ();
+                transaction.commit();
+                return success;
+            });
     }
 
     /// @brief Gets the (schema, permission) pairs for the user.
@@ -207,21 +250,21 @@ public:
         getPermissions(const std::string &user)
     {
         if (user.empty()){throw std::invalid_argument("User is empty");}
-        checkConnection();
         constexpr std::string_view query{
             "SELECT schema_name, permission_name FROM auth.list_user_schemas($1)"};
         const pqxx::params parameters{user};
-        std::vector<std::pair<std::string, std::string>> result;
-        {
-        const std::scoped_lock lock(mDatabaseMutex);
-        pqxx::work transaction(*mConnection);
-        for (const auto &row : transaction.exec(query, parameters))
-        {
-            result.emplace_back(row.at(0).as<std::string> (),
-                                row.at(1).as<std::string> ());
-        }
-        }
-        return result;
+        return withTransaction(
+            [&](pqxx::work &transaction)
+                -> std::vector<std::pair<std::string, std::string>>
+            {
+                std::vector<std::pair<std::string, std::string>> result;
+                for (const auto &row : transaction.exec(query, parameters))
+                {
+                    result.emplace_back(row.at(0).as<std::string> (),
+                                        row.at(1).as<std::string> ());
+                }
+                return result;
+            });
     }
 
     /// @brief Gets the hashed password from the database.
@@ -229,44 +272,37 @@ public:
     [[nodiscard]] std::optional<std::string> 
         getHashedPasswordFromDatabase(const std::string &user)
     {
-        std::optional<std::string> hashedPassword; 
         if (user.empty())
         {
             throw std::runtime_error("User is empty");
-        } 
-        checkConnection();
+        }
         constexpr std::string_view query{"SELECT auth.get_password_hash($1)"};
         const pqxx::params parameters{user};
-        // Null indicates no user
-        {
-        const std::scoped_lock lock(mDatabaseMutex);
-        pqxx::work transaction(*mConnection);
-        auto row = transaction.exec(query, parameters).one_row();
-        if (!row.at(0).is_null())
-        {
-            hashedPassword = std::make_optional<std::string> (row[0].as<std::string> ());
-        }
-        }
-        return hashedPassword;
+        return withTransaction(
+            [&](pqxx::work &transaction) -> std::optional<std::string>
+            {
+                auto row = transaction.exec(query, parameters).one_row();
+                // Null indicates no user
+                if (row.at(0).is_null()){return std::nullopt;}
+                return row[0].as<std::string> ();
+            });
     }
 
     /// @brief Record a successful login.
     [[nodiscard]] bool recordLogin(const std::string &user)
     {
-        bool success{false};
         constexpr std::string_view query{"SELECT auth.record_login($1)"};
-        checkConnection();
         const pqxx::params parameters{user};
-        {
-        const std::scoped_lock lock(mDatabaseMutex);
-        pqxx::work transaction(*mConnection);
-        auto row = transaction.exec(query, parameters).one_row();
-        success = row.at(0).as<bool> ();
-        // Without the commit the last_login update rolls back on the
-        // transaction's destruction.
-        transaction.commit();
-        }
-        return success;
+        return withTransaction(
+            [&](pqxx::work &transaction) -> bool
+            {
+                auto row = transaction.exec(query, parameters).one_row();
+                const auto success = row.at(0).as<bool> ();
+                // Without the commit the last_login update rolls back on
+                // the transaction's destruction.
+                transaction.commit();
+                return success;
+            });
     }
 
     /// @brief Decodes base64 text into exactly expectedLength bytes.
@@ -307,18 +343,16 @@ public:
             throw std::invalid_argument(
                 "Public key is not a base64 ed25519 public key");
         }
-        checkConnection();
         constexpr std::string_view query{"SELECT auth.add_user_key($1, $2, $3)"};
         const pqxx::params parameters{user, keyName, publicKey};
-        bool success{false};
-        {
-        const std::scoped_lock lock(mDatabaseMutex);
-        pqxx::work transaction(*mConnection);
-        auto row = transaction.exec(query, parameters).one_row();
-        success = row.at(0).as<bool> ();
-        transaction.commit();
-        }
-        return success;
+        return withTransaction(
+            [&](pqxx::work &transaction) -> bool
+            {
+                auto row = transaction.exec(query, parameters).one_row();
+                const auto success = row.at(0).as<bool> ();
+                transaction.commit();
+                return success;
+            });
     }
 
     /// @brief Revokes the user's named key.
@@ -328,18 +362,16 @@ public:
     {
         if (user.empty()){throw std::invalid_argument("User is empty");}
         if (keyName.empty()){throw std::invalid_argument("Key name is empty");}
-        checkConnection();
         constexpr std::string_view query{"SELECT auth.revoke_user_key($1, $2)"};
         const pqxx::params parameters{user, keyName};
-        bool success{false};
-        {
-        const std::scoped_lock lock(mDatabaseMutex);
-        pqxx::work transaction(*mConnection);
-        auto row = transaction.exec(query, parameters).one_row();
-        success = row.at(0).as<bool> ();
-        transaction.commit();
-        }
-        return success;
+        return withTransaction(
+            [&](pqxx::work &transaction) -> bool
+            {
+                auto row = transaction.exec(query, parameters).one_row();
+                const auto success = row.at(0).as<bool> ();
+                transaction.commit();
+                return success;
+            });
     }
 
     // Get user by their (public) key.  Only active (unrevoked, unexpired)
@@ -347,42 +379,35 @@ public:
     [[nodiscard]] 
     std::optional<std::string> getUserByKey(const std::string &publicKey)
     {
-        std::optional<std::string> result{std::nullopt};
         if (publicKey.empty())
         {
             throw std::invalid_argument("Public key is empty");
         }
-        checkConnection();
         constexpr std::string_view query{"SELECT auth.get_user_by_key($1)"};
         const pqxx::params parameters{publicKey};
-        {
-        const std::scoped_lock lock(mDatabaseMutex);
-        pqxx::work transaction(*mConnection);
-        auto row = transaction.exec(query, parameters).one_row();
-        if (!row.at(0).is_null())
-        {
-            result = std::optional<std::string> (row[0].as<std::string> ());
-        }
-        }
-        return result;
+        return withTransaction(
+            [&](pqxx::work &transaction) -> std::optional<std::string>
+            {
+                auto row = transaction.exec(query, parameters).one_row();
+                if (row.at(0).is_null()){return std::nullopt;}
+                return row[0].as<std::string> ();
+            });
     }
 
     /// @brief Records a successful key authentication; also touches the
     ///        user's last_login.
     [[nodiscard]] bool recordKeyUse(const std::string &publicKey)
     {
-        bool success{false};
         constexpr std::string_view query{"SELECT auth.record_key_use($1)"};
-        checkConnection();
         const pqxx::params parameters{publicKey};
-        {
-        const std::scoped_lock lock(mDatabaseMutex);
-        pqxx::work transaction(*mConnection);
-        auto row = transaction.exec(query, parameters).one_row();
-        success = row.at(0).as<bool> ();
-        transaction.commit();
-        }
-        return success;
+        return withTransaction(
+            [&](pqxx::work &transaction) -> bool
+            {
+                auto row = transaction.exec(query, parameters).one_row();
+                const auto success = row.at(0).as<bool> ();
+                transaction.commit();
+                return success;
+            });
     }
 
     // Auth user by public key:

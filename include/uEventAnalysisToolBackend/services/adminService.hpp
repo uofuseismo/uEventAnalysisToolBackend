@@ -14,7 +14,8 @@ namespace UEventAnalysisToolAPI::Admin::V1
 
 namespace UEventAnalysisToolBackend::Auth
 {
- class AuthNZ;
+ class AdministratorLoginAuthority;
+ class AdministratorTokenVerifier;
 }
 
 namespace UEventAnalysisToolBackend::Services
@@ -29,10 +30,12 @@ class AdminService final :
 {
 public:
     /// @brief Constructor
-    /// @param[in] authNZ   The authenticator/authorizer.
-    /// @param[in] logger   The application logger.
-    AdminService(std::shared_ptr<UEventAnalysisToolBackend::Auth::AuthNZ> authNZ,
-                 std::shared_ptr<spdlog::logger> logger);
+    /// @param[in] tokenVerifier  Verifies admin tokens.
+    /// @param[in] logger         The application logger.
+    AdminService(
+        std::shared_ptr<UEventAnalysisToolBackend::Auth::AdministratorLoginAuthority> loginAuthority,
+        std::shared_ptr<UEventAnalysisToolBackend::Auth::AdministratorTokenVerifier> tokenVerifier,
+        std::shared_ptr<spdlog::logger> logger);
 
     grpc::ServerUnaryReactor
         *LoginWithPassword(

@@ -32,8 +32,10 @@ message ListUsersResponse {
       google.protobuf.Timestamp expiration = 4;
    }
 
-   // The users.
-   repeated User users = 1;
+   // The active users.
+   repeated ActiveUser active_users = 1;
+   // The provisional users.
+   repeated ProvisionalUser provisional_users = 2; 
    // Further information on request.
-   string details = 2 [default = ""];
+   string details = 3 [default = ""];
 }

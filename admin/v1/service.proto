@@ -4,8 +4,8 @@ package UEventAnalysisToolAPI.Admin.V1;
 
 import "uEventAnalysisToolAPI/admin/v1/delete_user_request.proto";
 import "uEventAnalysisToolAPI/admin/v1/delete_user_response.proto";
-//import "uEventAnalysisToolAPI/admin/v1/list_users_request.proto";
-//import "uEventAnalysisToolAPI/admin/v1/list_users_response.proto";
+import "uEventAnalysisToolAPI/admin/v1/list_users_request.proto";
+import "uEventAnalysisToolAPI/admin/v1/list_users_response.proto";
 import "uEventAnalysisToolAPI/admin/v1/login_with_password_request.proto";
 import "uEventAnalysisToolAPI/admin/v1/login_with_password_response.proto";
 import "uEventAnalysisToolAPI/admin/v1/reset_password_request.proto";
@@ -22,15 +22,22 @@ import "uEventAnalysisToolAPI/admin/v1/reset_password_response.proto";
  */
 service AdminService {
    // Lists the users.
-   //rpc ListUsers(ListUsersRequest) returns(ListUsersResponse) {};
+   rpc ListUsers(ListUsersRequest) returns(ListUsersResponse) {};
    // Allows a user to step-up privileges to admin and execute the other
    // RPCs in this serivce.
    rpc LoginWithPassword(LoginWithPasswordRequest) returns(LoginWithPasswordResponse) {};
    // Creates a user.
-   //rpc CreaetUser(CreateUserRequest) returns(CreateUserResponse) {};
+   rpc CreateUser(CreateUserRequest) returns(CreateUserResponse) {};
    // Deletes a user.
    rpc DeleteUser(DeleteUserRequest) returns(DeleteUserResponse) {}; 
    // Resets a user's password.
+/*
    rpc ResetPassword(ResetPasswordRequest) returns(ResetPasswordResponse) {}; 
+   // Sets a user as an administrator.
+   rpc SetAdministrator(SetAdministratorRequest) returns(SetAdministratorResponse) {};
+   // Sets a user's permissions.
+   rpc SetPermission(SetPermissionRequest) returns(SetPermissionResponse) {};
+   // Revoke's a user's permissions.
+   rpc RevokePermission(RevokePermissionRequest) returns(RevokerPermissionResponse) {};
+*/
 }
-

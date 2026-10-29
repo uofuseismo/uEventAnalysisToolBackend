@@ -6,7 +6,7 @@ package UEventAnalysisToolAPI.Admin.V1;
 /**
  * The list of users.
  */
-message ListUsersRequest {
+message ListUsersResponse {
    // This is a user that has been added and has successfully changed
    // their password.
    message ActiveUser {

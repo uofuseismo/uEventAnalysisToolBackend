@@ -154,6 +154,8 @@ set(WILL_BE_DELETED_SRC
     lib/database/aqms/stationDurationMagnitude.cpp
     )
 set(PROTO_SRC
+    uEventAnalysisToolAPI/admin/v1/create_user_request.proto
+    uEventAnalysisToolAPI/admin/v1/create_user_response.proto
     uEventAnalysisToolAPI/admin/v1/delete_user_request.proto
     uEventAnalysisToolAPI/admin/v1/delete_user_response.proto
     uEventAnalysisToolAPI/admin/v1/list_users_request.proto

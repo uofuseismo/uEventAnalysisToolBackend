@@ -1,0 +1,12 @@
+edition = "2023";
+
+package UEventAnalysisToolAPI.Admin.V1;
+
+/**
+ * Requests the creation of a (provisional) user.
+ */
+message CreateUserRequest {
+   /// The name of the user to create. 
+   string user = 1;
+}
+

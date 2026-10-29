@@ -300,6 +300,7 @@ if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
    add_executable(unitTests
                   #testing/auth/jsonWebToken.cpp
                   #testing/auth/authNZ.cpp
+                  testing/auth/administratorLoginAuthority.cpp
                   testing/auth/grpc.cpp
                   testing/auth/databaseReconnect.cpp
                   testing/auth/password/hasher.cpp
@@ -329,7 +330,8 @@ if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
                             jwt-cpp::jwt-cpp Boost::json libpqxx::pqxx
                             Catch2::Catch2 Catch2::Catch2WithMain)
    target_include_directories(unitTests
-                              PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>)
+                              PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+                                      ${CMAKE_SOURCE_DIR}/lib)
    add_test(NAME unitTests
             COMMAND $<TARGET_FILE:unitTests>)
    protobuf_generate(TARGET unitTests

@@ -14,26 +14,24 @@
 #include <pqxx/pqxx>
 #include "uEventAnalysisToolBackend/auth/administratorLoginAuthority.hpp"
 #include "uEventAnalysisToolBackend/auth/authenticator.hpp"
-#include "uEventAnalysisToolBackend/auth/database.hpp"
-// NOLINTNEXTLINE(misc-include-cleaner)
-#include "uEventAnalysisToolBackend/auth/databaseOptions.hpp"
+//#include "uEventAnalysisToolBackend/auth/database.hpp"
+//#include "uEventAnalysisToolBackend/auth/databaseOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/loginAuthorityOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/hasher.hpp"
-// NOLINTNEXTLINE(misc-include-cleaner)
-#include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
+//#include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
 //#include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
 #include "databaseUtilities.hpp"
 
 using namespace UEventAnalysisToolBackend::Auth;
 
 class AdministratorLoginAuthority::AdministratorLoginAuthorityImpl : 
-    public ::IDatabase
+    public Detail::DatabaseConnection::Database
 {
 public:
     AdministratorLoginAuthorityImpl(
         const LoginAuthorityOptions &options,
         std::shared_ptr<spdlog::logger> logger) :
-        ::IDatabase
+        Detail::DatabaseConnection::Database
         {
             "AdministratorLoginAdministratorConsole",
             options.getDatabaseCredentials(),
@@ -53,9 +51,26 @@ public:
         {
             throw std::invalid_argument("Time-to-live not set");
         }
-        mPasswordHasher
-            = std::make_unique<Password::Hasher> 
-              (mOptions.getPasswordHasherOptions());
+        // Run a quick connection test.  This function doesn't get much
+        // action so turn it off after.
+        try
+        {
+            connect();
+            if (!isConnected())
+            {
+                SPDLOG_LOGGER_WARN(mLogger,
+                                   "Potential issue in creating db connection");
+            }
+            else
+            {
+                disconnect();
+            }
+        }
+        catch (const std::exception &e)
+        {
+            SPDLOG_LOGGER_WARN(mLogger, "Detected issue {} when connecting",
+                               e.what());
+        }
         mInitialized = true;
     }
 
@@ -110,6 +125,21 @@ public:
             });
     }
 
+    /// @brief Verify this user is an admin.
+    [[nodiscard]] bool isAdministrator(const std::string &user)
+    {   
+        constexpr std::string_view query{"SELECT auth.user_is_admin($1)"};
+        const pqxx::params parameters{user};
+        return withTransaction(
+            [&](pqxx::work &transaction) -> bool
+            {
+                auto row = transaction.exec(query, parameters).one_row();
+                const auto isAdmin = row.at(0).as<bool> (); 
+                transaction.commit();
+                return isAdmin;
+            });
+    }   
+
     /// @brief Record a successful login.
     [[nodiscard]] bool recordLogin(const std::string &user)
     {
@@ -127,30 +157,6 @@ public:
             });
     }
 
-    /// @brief Updates the user password.
-    /// @result True on success; false if the user does not exist.
-    [[nodiscard]] bool updatePassword(
-        const std::pair<std::string, std::string> &userAndPassword)
-    {
-        const auto &user = userAndPassword.first;
-        if (user.empty()){throw std::invalid_argument("User is empty");}
-        const auto &password = userAndPassword.second;
-        if (password.empty()){throw std::invalid_argument("Password is empty");}
-        // Hash outside the transaction: it is slow and needn't be redone
-        // on a retry.
-        auto hashedPassword = mPasswordHasher->hash(password);
-        constexpr std::string_view query{"SELECT auth.update_user_password($1, $2)"};
-        const pqxx::params parameters{user, hashedPassword};
-        return withTransaction(
-            [&](pqxx::work &transaction) -> bool
-            {
-                auto row = transaction.exec(query, parameters).one_row();
-                const auto success = row.at(0).as<bool> (); 
-                transaction.commit();
-                return success;
-            }); 
-    }   
-
     // Check the administrators password
     [[nodiscard]] IAuthenticator::Result authenticateByUserNameAndPassword(
         const std::pair<std::string, std::string> &userAndPassword)
@@ -160,51 +166,22 @@ public:
         auto hashedPassword = getHashedPasswordFromDatabase(user);
         if (hashedPassword != std::nullopt)
         {
-            if (mPasswordHasher->verify(password, *hashedPassword))
+            if (Password::Hasher::verify(password, *hashedPassword))
             {
-                // Okay, we're in update
+                // Putting this early lets someone figure out an admin
+                // based on response time.
+                if (!isAdministrator(user))
+                {
+                    SPDLOG_LOGGER_WARN(mLogger,
+                                "{} attempting to login as admin - rejected",
+                                user);
+                    return IAuthenticator::Result::InvalidCredentials;
+                }
                 if (!recordLogin(user))
                 {
                     SPDLOG_LOGGER_WARN(mLogger,
                                        "Failed to record login for {}",
                                        user); 
-                }
-                // In case I changed some parameters see if we need a rehash
-                bool needsRehash{false};
-                try
-                {
-                    needsRehash = mPasswordHasher->needsRehash(*hashedPassword);
-                }
-                catch (const std::exception &e)
-                {
-                    needsRehash = true;
-                    SPDLOG_LOGGER_WARN(mLogger,
-                                       "Will rehash password because {}",
-                                       e.what());
-                }
-                if (needsRehash)
-                {
-                    // Stored hash uses old/different params. 
-                    // We'll update that now.
-                    SPDLOG_LOGGER_INFO(mLogger, "Reshashing password for {}",
-                                       user);
-                    try
-                    {
-                        if (!updatePassword(std::pair{user, password}))
-                        {
-                            SPDLOG_LOGGER_WARN(mLogger,
-                                               "Password rehash did not update {}",
-                                               user);
-                        }
-                    }
-                    catch (const std::exception &e)
-                    {
-                        // It's actually okay - we'll just try again on next
-                        // login.  But the user is good to go
-                        SPDLOG_LOGGER_WARN(mLogger,
-                                           "Password update failed because {}",
-                                           std::string {e.what()});
-                    }
                 }
                 return IAuthenticator::Result::Authenticated;
             }
@@ -228,7 +205,6 @@ public:
 
 
     LoginAuthorityOptions mOptions;
-    std::unique_ptr<Password::Hasher> mPasswordHasher{nullptr};
     bool mInitialized{false};
 };
 

@@ -1,12 +1,14 @@
-#ifndef UEVENT_ANALYIS_TOOL_BACKEND_AUTH_DATABASE_UTILITIES_HPP
-#define UEVENT_ANALYIS_TOOL_BACKEND_AUTH_DATABASE_UTILITIES_HPP
+#ifndef UEVENT_ANALYSIS_TOOL_BACKEND_AUTH_DATABASE_UTILITIES_HPP
+#define UEVENT_ANALYSIS_TOOL_BACKEND_AUTH_DATABASE_UTILITIES_HPP
 #include <chrono>
 #include <exception>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 #include <pqxx/pqxx>
 #include <spdlog/spdlog.h>
@@ -14,13 +16,20 @@
 #include <spdlog/sinks/stdout_color_sinks.h> //NOLINT
 #include "uEventAnalysisToolBackend/database/credentials.hpp"
 
-namespace
+namespace UEventAnalysisToolBackend::Auth::Detail::DatabaseConnection 
 {
 
-class IDatabase
+class Database
 {
+protected:
+    // Only usable as a base class
+    ~Database()
+    {   
+        disconnect();
+    }   
+
 public:
-    IDatabase
+    Database
     (
         const std::string &loggerName,
         const UEventAnalysisToolBackend::Database::Credentials &credentials,
@@ -44,13 +53,6 @@ public:
             }
             // NOLINTEND(misc-include-cleaner)
         }
-        auto connectionString = mCredentials.getConnectionString();
-        mConnection = std::make_unique<pqxx::connection> (connectionString);
-        if (!isConnected())
-        {
-            SPDLOG_LOGGER_WARN(mLogger,
-                               "Potential issue in creating db connection");
-        }
     }
 
     /// @brief Connect to the database.
@@ -58,11 +60,6 @@ public:
     {       
         const std::scoped_lock lock(mDatabaseMutex);
         connectLocked();
-    }
-
-    ~IDatabase()
-    {
-        disconnect();
     }
 
     /// @brief Am I connected to the database?
@@ -165,7 +162,7 @@ public:
                 {
                     auto waitFor = mRetrySchedule[attempt + 1];
                     SPDLOG_LOGGER_WARN(mLogger,
-                    "Lost database connection ({}); reconnecting in {} seconds",
+                    "Lost database connection ({}); reconnecting in {} milliseconds",
                     e.what(), waitFor.count());
                     std::this_thread::sleep_for(waitFor);
                 }
@@ -176,6 +173,13 @@ public:
                             mRetrySchedule.size());
         throw std::runtime_error("Database connection error");
     }
+
+    // Get rid of some stuff
+    Database() = delete;
+    Database(const Database &) = delete;
+    Database(Database &&) noexcept = delete;
+    Database& operator=(const Database &) = delete;
+    Database& operator=(Database &&) noexcept = delete;
 //public:
     UEventAnalysisToolBackend::Database::Credentials mCredentials;
     std::shared_ptr<spdlog::logger> mLogger{nullptr};

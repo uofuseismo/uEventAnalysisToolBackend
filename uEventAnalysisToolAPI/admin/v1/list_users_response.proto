@@ -1,4 +1,5 @@
 edition = "2023";
+import "google/protobuf/timestamp.proto";
 
 package UEventAnalysisToolAPI.Auth.V1;
 
@@ -6,26 +7,33 @@ package UEventAnalysisToolAPI.Auth.V1;
  * The list of users.
  */
 message ListUsersRequest {
-   // Defines the access level of a user.
-   enum Access {
-      // The default value.  This value is unused.
-      ACCESS_UNSPECIFIED = 0;
-      // The user has read-only permission.
-      ACCESS_READ_ONLY = 1;
-      // The user has read-write permissions.
-      ACCESS_READ_WRITE = 2;
-   }
-
-   // Defines the access level per region.
-   message RegionAccess {
-      // The region name - e.g., utah, yellowstone, forge.
-      string region = 1;
-      // The access level.
-      Access acces = 2;
-   }
-        
-   message User {
+   // This is a user that has been added and has successfully changed
+   // their password.
+   message ActiveUser {
       // The user name.
       string name = 1; 
-      // The access (per region). 
+      // True indicates the user is an administrator.
+      bool administrator = 2;
+      // When the account was created.
+      google.protobuf.Timestamp created = 3;
+      // The last time this user logged in.
+      google.protobuf.Timestamp last_login = 4;
+   }
+
+   // This is a user that has not yet activated their account.
+   message ProvisionalUser {
+      // The user name
+      string name = 1;
+      // True indicates this is a provisional administrator.
+      bool administrator = 2;
+      // When the account was created.
+      google.protobuf.Timestamp created = 3;
+      // When the provisional status expires.
+      google.protobuf.Timestamp expiration = 4;
+   }
+
+   // The users.
+   repeated User users = 1;
+   // Further information on request.
+   string details = 2 [default = ""];
 }

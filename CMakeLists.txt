@@ -156,6 +156,8 @@ set(WILL_BE_DELETED_SRC
 set(PROTO_SRC
     uEventAnalysisToolAPI/admin/v1/delete_user_request.proto
     uEventAnalysisToolAPI/admin/v1/delete_user_response.proto
+    uEventAnalysisToolAPI/admin/v1/list_users_request.proto
+    uEventAnalysisToolAPI/admin/v1/list_users_response.proto
     uEventAnalysisToolAPI/admin/v1/login_with_password_request.proto
     uEventAnalysisToolAPI/admin/v1/login_with_password_response.proto
     uEventAnalysisToolAPI/admin/v1/reset_password_request.proto

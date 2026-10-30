@@ -1,4 +1,5 @@
 #include <chrono>
+#include <exception>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -13,6 +14,7 @@
 #include "uEventAnalysisToolBackend/services/adminService.hpp"
 #include "uEventAnalysisToolBackend/auth/administratorLoginAuthority.hpp"
 #include "uEventAnalysisToolBackend/auth/administratorTokenVerifier.hpp"
+#include "uEventAnalysisToolBackend/auth/authenticator.hpp"
 #include "uEventAnalysisToolBackend/grpc/parseAuthorizationHeader.hpp"
 #include "uEventAnalysisToolBackend/grpc/toRequestIdentifier.hpp"
 //#include "uEventAnalysisToolBackend/grpc/validateClientAccessToken.hpp"
@@ -99,7 +101,7 @@ grpc::ServerUnaryReactor
         Reactor(UAdminV1::LoginWithPasswordResponse *response,
                 grpc::CallbackServerContext *context,
                 const UAdminV1::LoginWithPasswordRequest &request,
-                //std::shared_ptr<UAuth::AdministratorLoginAuthority> &loginAuthority,
+                UAuth::AdministratorLoginAuthority &loginAuthority,
                 std::shared_ptr<spdlog::logger> logger) :
             mLogger(std::move(logger))
         {
@@ -114,6 +116,7 @@ grpc::ServerUnaryReactor
                 //metrics.incrementUnauthenticatedCounter(mRouteName);
                 Finish({grpc::StatusCode::UNAUTHENTICATED,
                         "No authorization header field specified"});
+                return;
             }
             auto userNameAndPassword
                 = GRPC::authorizationHeaderToUserNameAndPassword(
@@ -124,6 +127,53 @@ grpc::ServerUnaryReactor
                      "{} provided malformed credentials - rejected",
                      requestIdentifier);
                 Finish(userNameAndPassword.error());
+                return;
+            }
+            // Check the user
+            try
+            {
+                auto result
+                    = loginAuthority.loginWithPassword(*userNameAndPassword);
+                if (result)
+                {
+                    SPDLOG_LOGGER_INFO(mLogger,
+                                       "Processed {}; {} logged in as admin",
+                                       requestIdentifier,
+                                       userNameAndPassword->first); 
+                    response->set_json_web_token(*result);
+                }
+                else
+                {
+                    if (result.error() ==
+                        UAuth::IAuthenticator::Result::InvalidCredentials) 
+                    {
+                        //metrics.incrementUnauthenticatedCounter(mRouteName);
+                        SPDLOG_LOGGER_WARN(mLogger,
+                                 "Rejected {}; {} provided invalid credentials",
+                                 requestIdentifier,
+                                 userNameAndPassword->first);
+                        Finish({grpc::StatusCode::UNAUTHENTICATED,
+                                "Invalid credentials"});
+                        return;
+                    }
+                    //metrics.incrementServerErrorCounter(mRouteName);
+                    SPDLOG_LOGGER_ERROR(mLogger,
+                                        "Failed processing {}",
+                                        requestIdentifier);
+                    Finish({grpc::StatusCode::INTERNAL,
+                            "Server error - contact maintainer"});
+                    return;
+                }
+            }
+            catch (const std::exception &e)
+            {
+                //metrics.incrementServerErrorCounter(mRouteName);
+                SPDLOG_LOGGER_ERROR(mLogger,
+                     "Failed to process login request for {} because {}",
+                     requestIdentifier, e.what());
+                Finish({grpc::StatusCode::INTERNAL,
+                        "Server error - contact maintainer"});
+                return;
             }
            
             mSuccess = true;
@@ -175,7 +225,7 @@ grpc::ServerUnaryReactor
     return new Reactor(response,
                        context,
                        *request,
-                       //pImpl->mAuthNZ,
+                       *pImpl->mLoginAuthority,
                        pImpl->mLogger);
 }
 

@@ -13,13 +13,19 @@
 #include "uEventAnalysisToolBackend/services/authService.hpp"
 #include "uEventAnalysisToolBackend/auth/userLoginAuthority.hpp"
 #include "uEventAnalysisToolBackend/auth/userTokenVerifier.hpp"
+#include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
 #include "uEventAnalysisToolBackend/grpc/parseAuthorizationHeader.hpp"
 #include "uEventAnalysisToolBackend/grpc/requireBearer.hpp"
 #include "uEventAnalysisToolBackend/grpc/toRequestIdentifier.hpp"
 //#include "uEventAnalysisToolBackend/grpc/validateClientAccessToken.hpp"
 #include <uEventAnalysisToolAPI/auth/v1/service.grpc.pb.h>
+#include <uEventAnalysisToolAPI/auth/v1/change_password_request.pb.h>
+#include <uEventAnalysisToolAPI/auth/v1/change_password_response.pb.h>
 #include <uEventAnalysisToolAPI/auth/v1/login_with_password_request.pb.h>
 #include <uEventAnalysisToolAPI/auth/v1/login_with_password_response.pb.h>
+#include <uEventAnalysisToolAPI/auth/v1/get_password_requirements_request.pb.h>
+#include <uEventAnalysisToolAPI/auth/v1/password_requirements.pb.h>
+
 
 using namespace UEventAnalysisToolBackend::Services;
 
@@ -116,6 +122,7 @@ grpc::ServerUnaryReactor
                 //metrics.incrementUnauthenticatedCounter(mRouteName);
                 Finish({grpc::StatusCode::UNAUTHENTICATED,
                         "No authorization header field specified"});
+                return;
             }
             auto userNameAndPassword
                 = GRPC::authorizationHeaderToUserNameAndPassword(
@@ -126,6 +133,7 @@ grpc::ServerUnaryReactor
                      "{} provided malformed credentials - rejected",
                      requestIdentifier);
                 Finish(userNameAndPassword.error());
+                return;
             }
            
             mSuccess = true;
@@ -196,7 +204,7 @@ grpc::ServerUnaryReactor
         Reactor(UAuthV1::ChangePasswordResponse *response,
                 grpc::CallbackServerContext *context,
                 const UAuthV1::ChangePasswordRequest &request,
-                //std::shared_ptr<UAuth::UserLoginAuthority> &loginAuthority,
+                UAuth::UserLoginAuthority &loginAuthority,
                 const UAuth::UserTokenVerifier &tokenVerifier,
                 std::shared_ptr<spdlog::logger> logger) :
             mLogger(std::move(logger))
@@ -210,6 +218,79 @@ grpc::ServerUnaryReactor
                     "{} did not provide bearer authorization - rejected",
                      requestIdentifier);
                 Finish(bearerResult.error());
+                return;
+            }
+            auto user = bearerResult->getUser();
+            if (!request.has_old_password())
+            {
+                Finish({grpc::StatusCode::INVALID_ARGUMENT,
+                        "Old password not set"});
+                return;
+            }
+            if (!request.has_new_password())
+            {
+                Finish({grpc::StatusCode::INVALID_ARGUMENT,
+                        "New password not set"});
+                return;
+            }
+            const std::pair<std::string, std::string> currentCredentials
+            {
+                user,
+                request.old_password()
+            };
+            const auto &newPassword{request.new_password()};
+            auto changeResult
+                = loginAuthority.changePassword(currentCredentials,
+                                                newPassword); 
+            if (!changeResult.has_value())
+            {
+                if (changeResult.error() == 
+                    UAuth::UserLoginAuthority::ChangePasswordError::
+                    Unauthenticated)
+                {
+                    Finish({grpc::StatusCode::UNAUTHENTICATED,
+                            "Current password likely wrong"});
+                }
+                else if (changeResult.error() ==  
+                          UAuth::UserLoginAuthority::ChangePasswordError::
+                          PasswordTooShort)
+                {
+                    Finish({grpc::StatusCode::INVALID_ARGUMENT,
+                            "New password too short"});
+                }
+                else if (changeResult.error() ==
+                          UAuth::UserLoginAuthority::ChangePasswordError::
+                          PasswordTooLong)
+                {   
+                    Finish({grpc::StatusCode::INVALID_ARGUMENT,
+                            "New password too long"});
+                }
+                else if (changeResult.error() ==
+                          UAuth::UserLoginAuthority::ChangePasswordError::
+                          PasswordNeedsNumber)
+                {   
+                    Finish({grpc::StatusCode::INVALID_ARGUMENT,
+                            "New password requires a number"});
+                }
+                else if (changeResult.error() ==
+                          UAuth::UserLoginAuthority::ChangePasswordError::
+                          PasswordNeedsSpecialCharacter)
+                {   
+                    Finish({grpc::StatusCode::INVALID_ARGUMENT,
+                            "New password requires a special character"});
+                }
+                else if (changeResult.error() ==
+                          UAuth::UserLoginAuthority::ChangePasswordError::
+                          PasswordsMatch)
+                {   
+                    Finish({grpc::StatusCode::INVALID_ARGUMENT,
+                            "New and old password match"});
+                }
+                else
+                {
+                    Finish({grpc::StatusCode::INTERNAL,
+                            "Could not change password - contact maintainer"});
+                }
                 return;
             }
 
@@ -262,11 +343,105 @@ grpc::ServerUnaryReactor
     return new Reactor(response,
                        context,
                        *request,
+                       *pImpl->mLoginAuthority,
                        *pImpl->mTokenVerifier,
                        pImpl->mLogger);
     
 }   
 
+///-------------------------Password Requirements----------------------------///
+grpc::ServerUnaryReactor
+*AuthService::GetPasswordRequirements(
+    grpc::CallbackServerContext *context,
+    const UEventAnalysisToolAPI::Auth::V1::GetPasswordRequirementsRequest *request,
+    UEventAnalysisToolAPI::Auth::V1::PasswordRequirements *response)
+{
+    namespace UAuthV1 = UEventAnalysisToolAPI::Auth::V1;
+    class Reactor : public grpc::ServerUnaryReactor
+    {   
+    public:
+        Reactor(UAuthV1::PasswordRequirements *response,
+                grpc::CallbackServerContext *context,
+                const UAuthV1::GetPasswordRequirementsRequest &request,
+                UAuth::Password::PasswordPolicy &policy,
+                const UAuth::UserTokenVerifier &tokenVerifier,
+                std::shared_ptr<spdlog::logger> logger) :
+            mLogger(std::move(logger))
+        {
+            auto requestIdentifier = GRPC::toRequestIdentifier(*context);
+            auto bearerResult = GRPC::requireBearer(*context, tokenVerifier);
+            if (!bearerResult.has_value())
+            {
+                //metrics.incrementUnauthenticatedCounter(mRouteName);
+                SPDLOG_LOGGER_WARN(mLogger,
+                    "{} did not provide bearer authorization - rejected",
+                     requestIdentifier);
+                Finish(bearerResult.error());
+                return; 
+            }             
+
+            auto minAndMaxLength = policy.getMinimumAndMaximumLength();
+            response->set_minimum_length(minAndMaxLength.first);
+            response->set_maximum_length(minAndMaxLength.second);
+            response->set_requires_number(policy.requiresNumber());
+            response->set_requires_special_character(policy.requiresSpecialCharacter());
+            response->set_new_and_old_password_must_differ(policy.newAndOldPasswordMustDiffer());
+
+            mSuccess = true;
+            Finish(grpc::Status::OK);
+            SPDLOG_LOGGER_DEBUG(
+                mLogger,
+                "{} successfully retrieved password requirements",
+                requestIdentifier);
+        }
+    private:
+        void OnDone() override
+        {
+            if (mLogger)
+            {
+                SPDLOG_LOGGER_DEBUG(mLogger,
+                                    "{} RPC completed", mRouteName);
+            }   
+            //auto &metrics = Metrics::Singleton::getInstance();
+            if (mSuccess)
+            {   
+                //metrics.incrementSuccessCounter(mRouteName);
+                const auto endTime = std::chrono::steady_clock::now();
+                auto elapsedTime
+                    = std::chrono::duration<double>
+                      (endTime - mRPCStartTime);
+                //metrics.recordRouteDuration(elapsedTime, mRouteName);
+            }   
+            delete this;
+        }
+
+        void OnCancel() override
+        {
+            if (mLogger)
+            {
+                SPDLOG_LOGGER_DEBUG(mLogger,
+                                    "{} RPC canceled", mRouteName);
+            }
+        }
+//private:
+        std::shared_ptr<spdlog::logger> mLogger{nullptr};
+        const std::chrono::time_point<std::chrono::steady_clock> mRPCStartTime
+        {
+            std::chrono::steady_clock::now()
+        };
+        const std::string mRouteName{"GetPasswordRequirements"};
+        bool mSuccess{false};
+    };
+// TODO fix here
+UAuth::Password::PasswordPolicy policy;
+    return new Reactor(response,
+                       context,
+                       *request,
+                       policy,
+                       *pImpl->mTokenVerifier,
+                       pImpl->mLogger);
+
+}
 
 /// Destructor
 AuthService::~AuthService() = default;

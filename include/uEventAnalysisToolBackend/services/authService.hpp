@@ -12,6 +12,8 @@ namespace UEventAnalysisToolAPI::Auth::V1
  class ChangePasswordResponse;
  class LoginWithPasswordRequest;
  class LoginWithPasswordResponse;
+ class GetPasswordRequirementsRequest;
+ class PasswordRequirements;
 }
 
 namespace UEventAnalysisToolBackend::Auth
@@ -50,6 +52,11 @@ public:
             const UEventAnalysisToolAPI::Auth::V1::ChangePasswordRequest *request,
             UEventAnalysisToolAPI::Auth::V1::ChangePasswordResponse *response) override;
 
+    grpc::ServerUnaryReactor
+        *GetPasswordRequirements(
+            grpc::CallbackServerContext *context,
+            const UEventAnalysisToolAPI::Auth::V1::GetPasswordRequirementsRequest *request,
+            UEventAnalysisToolAPI::Auth::V1::PasswordRequirements *response) override;
 
     virtual ~AuthService();
 

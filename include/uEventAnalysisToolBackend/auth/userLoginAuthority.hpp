@@ -7,8 +7,8 @@
 #include <uEventAnalysisToolBackend/auth/authenticator.hpp>
 namespace UEventAnalysisToolBackend::Auth
 {
- class Database;
  class LoginAuthorityOptions;
+ class UserLoginAuthorityOptions;
 }
 namespace UEventAnalysisToolBackend::Auth
 {

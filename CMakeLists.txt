@@ -81,6 +81,8 @@ set(HEADER_FILES
     include/uEventAnalysisToolBackend/auth/loginAuthorityOptions.hpp
     #include/uEventAnalysisToolBackend/auth/tokenVerifier.hpp
     include/uEventAnalysisToolBackend/auth/tokenVerifierOptions.hpp
+    include/uEventAnalysisToolBackend/auth/userLoginAuthority.hpp
+    include/uEventAnalysisToolBackend/auth/userLoginAuthorityOptions.hpp
     include/uEventAnalysisToolBackend/auth/password/hasher.hpp
     include/uEventAnalysisToolBackend/auth/password/hasherOptions.hpp
     include/uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp

@@ -87,6 +87,7 @@ AuthService::AuthService
 {
 } 
 
+///---------------------------Login With Password----------------------------///
 grpc::ServerUnaryReactor
 *AuthService::LoginWithPassword(
     grpc::CallbackServerContext *context,
@@ -150,7 +151,7 @@ grpc::ServerUnaryReactor
                 const auto endTime = std::chrono::steady_clock::now();
                 auto elapsedTime
                     = std::chrono::duration<double>
-                      (mRPCStartTime - endTime);
+                      (endTime - mRPCStartTime);
                 //metrics.recordRouteDuration(elapsedTime, mRouteName);
             }
             delete this;
@@ -180,6 +181,92 @@ grpc::ServerUnaryReactor
                        pImpl->mLogger);
 
 }
+
+///------------------------------Change Password-----------------------------///
+grpc::ServerUnaryReactor
+*AuthService::ChangePassword(
+    grpc::CallbackServerContext *context,
+    const UEventAnalysisToolAPI::Auth::V1::ChangePasswordRequest *request,
+    UEventAnalysisToolAPI::Auth::V1::ChangePasswordResponse *response)
+{
+    namespace UAuthV1 = UEventAnalysisToolAPI::Auth::V1;
+    class Reactor : public grpc::ServerUnaryReactor
+    {   
+    public:
+        Reactor(UAuthV1::ChangePasswordResponse *response,
+                grpc::CallbackServerContext *context,
+                const UAuthV1::ChangePasswordRequest &request,
+                //std::shared_ptr<UAuth::UserLoginAuthority> &loginAuthority,
+                const UAuth::UserTokenVerifier &tokenVerifier,
+                std::shared_ptr<spdlog::logger> logger) :
+            mLogger(std::move(logger))
+        {
+            auto requestIdentifier = GRPC::toRequestIdentifier(*context);
+            auto bearerResult = GRPC::requireBearer(*context, tokenVerifier);
+            if (!bearerResult.has_value())
+            {
+                //metrics.incrementUnauthenticatedCounter(mRouteName);
+                SPDLOG_LOGGER_WARN(mLogger,
+                    "{} did not provide bearer authorization - rejected",
+                     requestIdentifier);
+                Finish(bearerResult.error());
+                return;
+            }
+
+            mSuccess = true;
+            Finish(grpc::Status::OK);
+            SPDLOG_LOGGER_DEBUG(
+                mLogger,
+                "{} successfully changed password",
+                requestIdentifier);
+        };
+
+    private:
+        void OnDone() override
+        {
+            if (mLogger)
+            {
+                SPDLOG_LOGGER_DEBUG(mLogger,
+                                    "{} RPC completed", mRouteName);
+            }
+            //auto &metrics = Metrics::Singleton::getInstance();
+            if (mSuccess)
+            {
+                //metrics.incrementSuccessCounter(mRouteName);
+                const auto endTime = std::chrono::steady_clock::now();
+                auto elapsedTime
+                    = std::chrono::duration<double>
+                      (endTime - mRPCStartTime);
+                //metrics.recordRouteDuration(elapsedTime, mRouteName);
+            }
+            delete this;
+        }
+
+        void OnCancel() override
+        {
+            if (mLogger)
+            {
+                SPDLOG_LOGGER_DEBUG(mLogger,
+                                    "{} RPC canceled", mRouteName);
+            }
+        }
+//private:
+        std::shared_ptr<spdlog::logger> mLogger{nullptr};
+        const std::chrono::time_point<std::chrono::steady_clock> mRPCStartTime
+        {
+            std::chrono::steady_clock::now()
+        };
+        const std::string mRouteName{"ChangePassword"}; 
+        bool mSuccess{false};
+    };
+    return new Reactor(response,
+                       context,
+                       *request,
+                       *pImpl->mTokenVerifier,
+                       pImpl->mLogger);
+    
+}   
+
 
 /// Destructor
 AuthService::~AuthService() = default;

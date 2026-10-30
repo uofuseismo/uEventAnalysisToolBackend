@@ -18,6 +18,7 @@
 #include "uEventAnalysisToolBackend/auth/authenticator.hpp"
 #include "uEventAnalysisToolBackend/auth/loginAuthorityOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/hasher.hpp"
+#include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
 #include "databaseUtilities.hpp"
 
 using namespace UEventAnalysisToolBackend::Auth;
@@ -49,6 +50,9 @@ public:
         {
             throw std::invalid_argument("Time-to-live not set");
         }
+        mPasswordHasher
+            = std::make_unique<Password::Hasher>
+              (mOptions.getPasswordHasherOptions());
         // Connect since this will get hit fairly often
         try
         {
@@ -151,6 +155,30 @@ public:
             }); 
     }
 
+    /// @brief Updates the password. 
+    /// @note If this the user's first login this will also clear
+    ///       provisional_until and stamp activated.
+    /// @result True indicates the user's password was updated.
+    ///         False indicates either - the user doesn't exist or
+    ///         user is provisional and the issued password has expired.
+    [[nodiscard]] 
+    bool changePassword(
+        const std::pair<std::string, std::string> &userAndHashedPassword)
+    {
+        constexpr std::string_view query{"SELECT auth.update_user_password($1, $2)"};
+        const pqxx::params parameters{userAndHashedPassword.first,
+                                      userAndHashedPassword.second};
+        return withTransaction(
+            [&](pqxx::work &transaction) -> bool
+            {
+                const auto success
+                   = transaction.exec(query, parameters).one_row()
+                                                        .at(0).as<bool> ();
+                transaction.commit();
+                return success;
+            });
+    }
+
     /// @brief Record a successful login.
     [[nodiscard]] bool recordLogin(const std::string &user)
     {
@@ -228,6 +256,7 @@ public:
 
 //private:
     LoginAuthorityOptions mOptions;
+    std::unique_ptr<Password::Hasher> mPasswordHasher{nullptr};
     bool mInitialized{false};
 };
 
@@ -293,9 +322,58 @@ UserLoginAuthority::loginWithPassword(
         SPDLOG_LOGGER_WARN(pImpl->mLogger,
                            "Database failure {} when authentcating {}",
                            e.what(), user);
-        return  std::unexpected(IAuthenticator::Result::ServerError);
+        return std::unexpected(IAuthenticator::Result::ServerError);
     }   
 }
+
+/// Change the user name and password
+std::expected<void, UserLoginAuthority::ChangePasswordError>
+UserLoginAuthority::changePassword(
+    const std::pair<std::string, std::string> &userNameAndPassword,
+    const std::string &newPassword)
+{
+    // New password can't be empty
+    if (newPassword.empty())
+    {
+        return std::unexpected(ChangePasswordError::PasswordTooShort);
+    }
+    // Make the user login
+    auto loginResult = loginWithPassword(userNameAndPassword);
+    if (loginResult.has_value())
+    {
+        try
+        {
+            auto hashedPassword = pImpl->mPasswordHasher->hash(newPassword);
+            if (hashedPassword.empty())
+            {
+                SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+                                    "Resulting hashed password is empty");
+            }
+//            return pImpl->changePassword(
+//                std::pair {userNameAndPassword.first, hashedPassword});
+        }
+        catch (const std::exception &e)
+        {
+            SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+                                "Failed to change password for {} because {}",
+                                userNameAndPassword.first, e.what());
+            return std::unexpected(ChangePasswordError::ServerError);
+        }
+    }
+    else
+    {
+        if (loginResult.error() == IAuthenticator::Result::InvalidCredentials)
+        {
+            return std::unexpected(ChangePasswordError::Unauthenticated);
+        }
+        else if (loginResult.error() == IAuthenticator::Result::ServerError)
+        {
+            return std::unexpected(ChangePasswordError::PasswordTooShort);
+        }
+        return std::unexpected(ChangePasswordError::PasswordTooShort);
+    }
+}
+
 
 /// Destructor
 UserLoginAuthority::~UserLoginAuthority() = default;

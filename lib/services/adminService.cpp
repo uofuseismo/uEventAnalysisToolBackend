@@ -213,7 +213,7 @@ grpc::ServerUnaryReactor
                 const auto endTime = std::chrono::steady_clock::now();
                 auto elapsedTime
                     = std::chrono::duration<double>
-                      (mRPCStartTime - endTime);
+                      (endTime - mRPCStartTime);
                 //metrics.recordRouteDuration(elapsedTime, mRouteName);
             }
             delete this;
@@ -300,7 +300,7 @@ grpc::ServerUnaryReactor
                 const auto endTime = std::chrono::steady_clock::now();
                 auto elapsedTime
                     = std::chrono::duration<double>
-                      (mRPCStartTime - endTime);
+                      (endTime - mRPCStartTime);
                 //metrics.recordRouteDuration(elapsedTime, mRouteName);
             }
             delete this;

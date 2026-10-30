@@ -19,6 +19,17 @@ namespace UEventAnalysisToolBackend::Auth
 class UserLoginAuthority
 {
 public:
+    enum class ChangePasswordError
+    {
+        Unauthenticated,     /*!< Could not authenticate this user. */
+        PasswordTooShort,    /*!< New password is too short. */
+        PasswordNeedsNumber, /*!< The new password requires a number. */
+        PasswordNeedsSpecialCharacter, /*!< The new password needs a new character. */
+        PasswordTooLong, /*!< The new password is too long. */
+        PasswordsMatch,  /*!< The new and old password match. */
+        ServerError
+    };
+public:
     /// @brief Constructor.
     /// @param[in] options   The login authority options.
     /// @param[in] logger    The application logger.
@@ -37,7 +48,15 @@ public:
     ///         not an admin claim.  
     [[nodiscard]] std::expected<std::string, IAuthenticator::Result>
         loginWithPassword(const std::pair<std::string, std::string> &userNameAndPassword) const;
- 
+
+    /// @brief Changes password.
+    /// @param[in] userNameAndPassword  The user name (frist) and password
+    ///                                 (second).
+    /// @param[in] newPassword  The password.
+    /// @result True indicates this was successful.
+    [[nodiscard]] auto changePassword(const std::pair<std::string, std::string> &userNameAndPassword,
+                                      const std::string &newPassword) -> std::expected<void, ChangePasswordError>;
+
     /// @brief Key-based login.
     /// @param[in] userNameAndKey   The user name (first) and the
     ///                             user's public key (second).

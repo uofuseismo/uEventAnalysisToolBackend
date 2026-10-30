@@ -40,6 +40,6 @@ service AdminService {
    // Sets a user's permissions.
    rpc SetPermission(SetPermissionRequest) returns(SetPermissionResponse) {};
    // Revoke's a user's permissions.
-   rpc RevokePermission(RevokePermissionRequest) returns(RevokerPermissionResponse) {};
+   rpc RevokePermission(RevokePermissionRequest) returns(RevokePermissionResponse) {};
 */
 }

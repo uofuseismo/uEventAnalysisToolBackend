@@ -113,6 +113,7 @@ struct ProgramOptions
         auto serverGRPCOptions
             = UEAT::GRPC::GRPCServerOptions::fromInitializationFile(
                  iniFile, "GRPCServer"); 
+        grpcServerOptions.setGRPCOptions(serverGRPCOptions);
 
         // Backend database
         //backendDatabaseCredentials
@@ -161,7 +162,7 @@ struct ProgramOptions
     UEventAnalysisToolBackend::Auth::Password::HasherOptions passwordHasherOptions;
     UEventAnalysisToolBackend::Auth::Password::PasswordPolicy passwordPolicy;
     UEventAnalysisToolBackend::Auth::DatabaseOptions authDatabaseOptions;
-    UEventAnalysisToolBackend::GRPC::ServerOptions mGRPCServerOptions;
+    UEventAnalysisToolBackend::GRPC::ServerOptions grpcServerOptions;
     MapServerOptions mapServerOptions;
     std::string applicationName{APPLICATION_NAME};
     std::chrono::seconds printSummaryInterval

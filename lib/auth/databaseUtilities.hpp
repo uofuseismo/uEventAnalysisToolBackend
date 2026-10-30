@@ -112,10 +112,10 @@ public:
                                    + mCredentials.getDatabaseName()
                                    + " at " + mCredentials.getHost());
         }
-        SPDLOG_LOGGER_INFO(mLogger, 
-                           "Connected to {} at {}",
-                           mCredentials.getDatabaseName(),
-                           mCredentials.getHost());
+        SPDLOG_LOGGER_DEBUG(mLogger, 
+                            "Connected to {} at {}",
+                            mCredentials.getDatabaseName(),
+                            mCredentials.getHost());
     }
 
     /// @brief Disconnect from the database

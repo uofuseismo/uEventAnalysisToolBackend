@@ -1,14 +1,11 @@
 #ifndef UEVENT_ANALYSIS_TOOL_BACKEND_GRPC_SERVER_HPP
 #define UEVENT_ANALYSIS_TOOL_BACKEND_GRPC_SERVER_HPP
+#include <future>
 #include <map>
 #include <memory>
 #include <spdlog/logger.h>
-#include <grpcpp/impl/service_type.h>
+//#include <grpcpp/impl/service_type.h>
 
-namespace UEventAnalysisToolBackend::Auth
-{
- class AuthNZ;
-} 
 namespace UEventAnalysisToolBackend::GRPC
 {
  class ServerOptions;
@@ -26,6 +23,15 @@ public:
            std::map<std::string, std::unique_ptr<grpc::Service>> &&servicesMap,
            std::shared_ptr<spdlog::logger> logger);
 
+    /// @result True indicates the server is initialized.
+    [[nodiscard]] bool isInitialized() const noexcept;
+
+    /// @brief Starts the main gRPC server.
+    /// @throws std::runtime_error if \c isInitialized() is false.
+    [[nodiscard]] std::future<void> start();
+
+    /// @brief Stops the gRPC server.
+    void stop();
 
     /// @brief Destructor.
     ~Server();

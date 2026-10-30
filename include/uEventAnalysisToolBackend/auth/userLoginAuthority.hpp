@@ -20,18 +20,15 @@ class UserLoginAuthority
 {
 public:
     /// @brief Constructor.
-    /// @param[in] userOptions  Defines the claims, TTL, and signature
-    ///                         algorithm in user JWTs.
-    /// @param[in] administratorOptions  Defines the claims, TTL, and signature
-    ///                                  algorithm in administrator JWTs.
-    /// @param[in] database  The auth.* database from which we will obtain
-    ///                      users and their keys and permissions.
+    /// @param[in] options   The login authority options.
     /// @param[in] logger    The application logger.
     /// @throws std::invalid_argument if the database is null, the
     ///         algorithm is unsigned, or there is no private key.
     UserLoginAuthority(const LoginAuthorityOptions &options,
-                       std::unique_ptr<Database> &&database,
                        std::shared_ptr<spdlog::logger> logger); 
+
+    /// @result True indicates that the authority is initialized.
+    [[nodiscard]] bool isInitialized() const noexcept;
 
     /// @brief Password login.
     /// @param[in] userNameAndPassword  The user name (first) and password

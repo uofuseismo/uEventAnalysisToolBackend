@@ -16,7 +16,6 @@
 #include <grpcpp/support/status.h>
 #include <boost/beast/core/detail/base64.hpp>
 #include "uEventAnalysisToolBackend/auth/grpc.hpp"
-#include "uEventAnalysisToolBackend/auth/authNZ.hpp"
 #include "uEventAnalysisToolBackend/auth/jsonWebToken.hpp"
 #include "uEventAnalysisToolBackend/auth/authenticator.hpp"
 

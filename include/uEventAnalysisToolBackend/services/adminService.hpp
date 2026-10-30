@@ -8,6 +8,8 @@
 
 namespace UEventAnalysisToolAPI::Admin::V1
 {
+ class CreateUserRequest;
+ class CreateUserResponse;
  class LoginWithPasswordRequest;
  class LoginWithPasswordResponse;
 }
@@ -16,6 +18,7 @@ namespace UEventAnalysisToolBackend::Auth
 {
  class AdministratorLoginAuthority;
  class AdministratorTokenVerifier;
+ class UserTokenVerifier;
 }
 
 namespace UEventAnalysisToolBackend::Services
@@ -30,11 +33,16 @@ class AdminService final :
 {
 public:
     /// @brief Constructor
-    /// @param[in] tokenVerifier  Verifies admin tokens.
+    /// @param[in] loginAuthority      Handles the database user/password
+    ///                                interaction for admin actions.
+    /// @param[in] adminTokenVerifier  Verifies admin tokens.
+    /// @param[in] userTokenVerifier   Verifies the user token for the initial
+    ///                                login.
     /// @param[in] logger         The application logger.
     AdminService(
         std::shared_ptr<UEventAnalysisToolBackend::Auth::AdministratorLoginAuthority> loginAuthority,
-        std::shared_ptr<UEventAnalysisToolBackend::Auth::AdministratorTokenVerifier> tokenVerifier,
+        std::shared_ptr<UEventAnalysisToolBackend::Auth::AdministratorTokenVerifier> adminTokenVerifier,
+        std::shared_ptr<UEventAnalysisToolBackend::Auth::UserTokenVerifier> userTokenVerifier,
         std::shared_ptr<spdlog::logger> logger);
 
     grpc::ServerUnaryReactor
@@ -42,6 +50,13 @@ public:
             grpc::CallbackServerContext *context,
             const UEventAnalysisToolAPI::Admin::V1::LoginWithPasswordRequest *request,
             UEventAnalysisToolAPI::Admin::V1::LoginWithPasswordResponse *response) override;
+
+    grpc::ServerUnaryReactor
+        *CreateUser(
+            grpc::CallbackServerContext *context,
+            const UEventAnalysisToolAPI::Admin::V1::CreateUserRequest *request,
+            UEventAnalysisToolAPI::Admin::V1::CreateUserResponse *response) override;
+
 
     virtual ~AdminService();
 

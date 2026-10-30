@@ -20,12 +20,7 @@ class AdministratorLoginAuthority
 {
 public:
     /// @brief Constructor.
-    /// @param[in] userOptions  Defines the claims, TTL, and signature
-    ///                         algorithm in user JWTs.
-    /// @param[in] administratorOptions  Defines the claims, TTL, and signature
-    ///                                  algorithm in administrator JWTs.
-    /// @param[in] database  The auth.* database from which we will obtain
-    ///                      users and their keys and permissions.
+    /// @param[in] options   The login authority options.
     /// @param[in] logger    The application logger.
     /// @throws std::invalid_argument if the database is null, the
     ///         algorithm is unsigned, or there is no private key.

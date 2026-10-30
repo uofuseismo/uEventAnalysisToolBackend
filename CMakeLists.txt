@@ -71,10 +71,10 @@ set(HEADER_FILES
     include/uEventAnalysisToolBackend/auth/administratorLoginAuthority.hpp
     include/uEventAnalysisToolBackend/auth/administratorTokenVerifier.hpp
     include/uEventAnalysisToolBackend/auth/authenticator.hpp
-    include/uEventAnalysisToolBackend/auth/authNZ.hpp
+    #include/uEventAnalysisToolBackend/auth/authNZ.hpp
     include/uEventAnalysisToolBackend/auth/database.hpp
     include/uEventAnalysisToolBackend/auth/databaseOptions.hpp
-    include/uEventAnalysisToolBackend/auth/grpc.hpp
+    #include/uEventAnalysisToolBackend/auth/grpc.hpp
     include/uEventAnalysisToolBackend/auth/jsonWebToken.hpp
     include/uEventAnalysisToolBackend/auth/jsonWebTokenOptions.hpp
     include/uEventAnalysisToolBackend/auth/loginAuthority.hpp
@@ -88,6 +88,7 @@ set(HEADER_FILES
     include/uEventAnalysisToolBackend/grpc/grpcServerOptions.hpp
     include/uEventAnalysisToolBackend/grpc/parseAuthorizationHeader.hpp
     include/uEventAnalysisToolBackend/grpc/requestIdentifierInterceptor.hpp
+    include/uEventAnalysisToolBackend/grpc/requireBearer.hpp
     include/uEventAnalysisToolBackend/grpc/server.hpp
     include/uEventAnalysisToolBackend/grpc/serverOptions.hpp
     include/uEventAnalysisToolBackend/grpc/toRequestIdentifier.hpp
@@ -113,14 +114,15 @@ set(LIBRARY_SRC
     lib/auth/administratorLoginAuthority.cpp
     lib/auth/administratorTokenVerifier.cpp
     lib/auth/authenticator.cpp
-    lib/auth/authNZ.cpp
+    #lib/auth/authNZ.cpp
     lib/auth/database.cpp
     lib/auth/databaseOptions.cpp
-    lib/auth/grpc.cpp
+    #lib/auth/grpc.cpp
     lib/auth/jsonWebToken.cpp
     lib/auth/jsonWebTokenOptions.cpp
-    lib/auth/loginAuthority.cpp
+    #lib/auth/loginAuthority.cpp
     lib/auth/loginAuthorityOptions.cpp
+    lib/auth/userLoginAuthority.cpp
     lib/auth/userTokenVerifier.cpp
     #lib/auth/tokenVerifier.cpp
     lib/auth/tokenVerifierOptions.cpp
@@ -131,6 +133,7 @@ set(LIBRARY_SRC
     lib/grpc/grpcServerOptions.cpp
     lib/grpc/parseAuthorizationHeader.cpp
     lib/grpc/requestIdentifierInterceptor.cpp
+    lib/grpc/requireBearer.cpp
     lib/grpc/server.cpp
     lib/grpc/serverOptions.cpp
     lib/grpc/toRequestIdentifier.cpp
@@ -301,7 +304,7 @@ if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
                   #testing/auth/jsonWebToken.cpp
                   #testing/auth/authNZ.cpp
                   testing/auth/administratorLoginAuthority.cpp
-                  testing/auth/grpc.cpp
+                  #testing/auth/grpc.cpp
                   testing/auth/databaseReconnect.cpp
                   testing/auth/password/hasher.cpp
                   testing/auth/password/hasherOptions.cpp

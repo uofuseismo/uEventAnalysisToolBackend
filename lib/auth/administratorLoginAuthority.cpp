@@ -65,6 +65,9 @@ public:
             {
                 disconnect();
             }
+            SPDLOG_LOGGER_INFO(
+                mLogger,
+                "Successful admin auth database connection smoke test");
         }
         catch (const std::exception &e)
         {

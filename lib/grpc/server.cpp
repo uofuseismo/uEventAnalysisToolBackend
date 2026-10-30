@@ -1,6 +1,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <future>
 #include <map>
 #include <memory>
 #include <stdexcept>
@@ -17,11 +18,11 @@
 #include <grpcpp/support/interceptor.h>
 #include <grpcpp/support/server_interceptor.h>
 #include <grpcpp/impl/channel_argument_option.h>
+#include <grpcpp/impl/service_type.h>
 //#include <grpcpp/support/string_ref.h>
 #include <grpcpp/support/time.h> //NOLINT
 //#include <uEventAnalysisToolAPI/admin/v1/service.grpc.pb.h>
 //#include <uEventAnalysisToolAPI/auth/v1/service.grpc.pb.h>
-#include "uEventAnalysisToolBackend/auth/authNZ.hpp"
 #include "uEventAnalysisToolBackend/grpc/server.hpp"
 #include "uEventAnalysisToolBackend/grpc/serverOptions.hpp"
 #include "uEventAnalysisToolBackend/grpc/grpcServerOptions.hpp"
@@ -227,6 +228,10 @@ public:
             SPDLOG_LOGGER_DEBUG(mLogger, "Registering {}", service.first);
             builder.RegisterService(service.second.get());
         }
+        SPDLOG_LOGGER_INFO(mLogger,
+                           "Registered {} services.  Bind gRPC server to {}",
+                           mServicesMap.size(),
+                           address);
         mServer = builder.BuildAndStart();
         if (mServer == nullptr)
         {
@@ -284,6 +289,30 @@ Server::Server(
                                         std::move(servicesMap),
                                         std::move(logger)))
 {
+}
+
+/// Initialized?
+bool Server::isInitialized() const noexcept
+{
+    return pImpl->mInitialized;
+}
+
+/// Start the server
+std::future<void> Server::start()
+{
+    if (!isInitialized())
+    {
+        throw std::runtime_error("gRPC server not initialized");
+    }
+    return std::async(std::launch::async,
+                      &ServerImpl::start,
+                      &*pImpl);
+}
+
+/// Stop the server
+void Server::stop()
+{
+    pImpl->stop();
 }
 
 /// Destructor

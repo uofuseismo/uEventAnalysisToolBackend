@@ -14,7 +14,6 @@ namespace UEventAnalysisToolAPI::Auth::V1
 
 namespace UEventAnalysisToolBackend::Auth
 {
- class AuthNZ;
  class UserLoginAuthority;
  class UserTokenVerifier;
 }

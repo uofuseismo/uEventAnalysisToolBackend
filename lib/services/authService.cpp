@@ -11,9 +11,10 @@
 #include <grpcpp/support/server_callback.h>
 #include <grpcpp/support/status.h>
 #include "uEventAnalysisToolBackend/services/authService.hpp"
-#include "uEventAnalysisToolBackend/auth/authNZ.hpp"
-#include "uEventAnalysisToolBackend/auth/database.hpp"
+#include "uEventAnalysisToolBackend/auth/userLoginAuthority.hpp"
+#include "uEventAnalysisToolBackend/auth/userTokenVerifier.hpp"
 #include "uEventAnalysisToolBackend/grpc/parseAuthorizationHeader.hpp"
+#include "uEventAnalysisToolBackend/grpc/requireBearer.hpp"
 #include "uEventAnalysisToolBackend/grpc/toRequestIdentifier.hpp"
 //#include "uEventAnalysisToolBackend/grpc/validateClientAccessToken.hpp"
 #include <uEventAnalysisToolAPI/auth/v1/service.grpc.pb.h>
@@ -29,15 +30,29 @@ class AuthService::AuthServiceImpl
 public:
     AuthServiceImpl
     (
-        std::shared_ptr<UAuth::AuthNZ> authNZ,
+        std::shared_ptr<UAuth::UserLoginAuthority> loginAuthority,
+        std::shared_ptr<UAuth::UserTokenVerifier> tokenVerifier,
         std::shared_ptr<spdlog::logger> logger
     ) :
-        mAuthNZ(std::move(authNZ)),
+        mLoginAuthority(std::move(loginAuthority)),
+        mTokenVerifier(std::move(tokenVerifier)),
         mLogger(std::move(logger))
     {
-        if (mAuthNZ == nullptr)
+        if (mLoginAuthority == nullptr)
+        {   
+            throw std::invalid_argument("Login authority is null");
+        }   
+        if (!mLoginAuthority->isInitialized())
         {
-            throw std::invalid_argument("AuthNZ is null");
+            throw std::invalid_argument("Login authority not initialized");
+        }   
+        if (mTokenVerifier == nullptr)
+        {
+            throw std::invalid_argument("User token verifier is null");
+        }
+        if (!mTokenVerifier->isInitialized())
+        {
+            throw std::invalid_argument("User token verifier not initialized");
         }
         if (mLogger == nullptr)
         {
@@ -52,23 +67,25 @@ public:
         }
     }
 //private:
-    std::shared_ptr<UAuth::AuthNZ> mAuthNZ{nullptr};
+    std::shared_ptr<UAuth::UserLoginAuthority> mLoginAuthority{nullptr};
+    std::shared_ptr<UAuth::UserTokenVerifier> mTokenVerifier{nullptr};
     std::shared_ptr<spdlog::logger> mLogger{nullptr};
 };
 
-/*
 /// Constructor
 AuthService::AuthService
     (
-        std::shared_ptr<UAuth::AuthNZ> authNZ,
+        std::shared_ptr<UAuth::UserLoginAuthority> loginAuthority,
+        std::shared_ptr<UAuth::UserTokenVerifier> tokenVerifier,
         std::shared_ptr<spdlog::logger> logger
     ) :
     pImpl(std::make_unique<AuthServiceImpl>
-          (std::move(authNZ), std::move(logger))),
-    UEventAnalysisToolAPI::Auth::V1::AuthService::CallbackService {}
+          (std::move(loginAuthority),
+           std::move(tokenVerifier),
+           std::move(logger)))//,
+    //UEventAnalysisToolAPI::Auth::V1::AuthService::CallbackService {}
 {
 } 
-*/
 
 grpc::ServerUnaryReactor
 *AuthService::LoginWithPassword(
@@ -83,7 +100,7 @@ grpc::ServerUnaryReactor
         Reactor(UAuthV1::LoginWithPasswordResponse *response,
                 grpc::CallbackServerContext *context,
                 const UAuthV1::LoginWithPasswordRequest &request,
-                std::shared_ptr<UAuth::AuthNZ> &authenticator,
+                std::shared_ptr<UAuth::UserLoginAuthority> &loginAuthority,
                 std::shared_ptr<spdlog::logger> logger) :
             mLogger(std::move(logger))
         {
@@ -159,7 +176,7 @@ grpc::ServerUnaryReactor
     return new Reactor(response,
                        context,
                        *request,
-                       pImpl->mAuthNZ,
+                       pImpl->mLoginAuthority,
                        pImpl->mLogger);
 
 }

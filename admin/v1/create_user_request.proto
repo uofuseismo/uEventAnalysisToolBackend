@@ -7,6 +7,6 @@ package UEventAnalysisToolAPI.Admin.V1;
  */
 message CreateUserRequest {
    /// The name of the user to create. 
-   string user = 1;
+   string name = 1;
 }
 

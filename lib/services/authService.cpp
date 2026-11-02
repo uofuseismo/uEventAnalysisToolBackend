@@ -248,23 +248,26 @@ grpc::ServerUnaryReactor
             mLogger(std::move(logger))
         {
             auto requestIdentifier = GRPC::toRequestIdentifier(*context);
-            auto bearerResult = GRPC::requireBearer(*context, tokenVerifier);
-            if (!bearerResult.has_value())
-            {
-                //metrics.incrementUnauthenticatedCounter(mRouteName);
+            // Extract the username and password from Basic
+            auto basicField = context->client_metadata().find("authorization");
+            if (basicField == context->client_metadata().end())
+            {   
                 SPDLOG_LOGGER_WARN(mLogger,
-                    "{} did not provide bearer authorization - rejected",
+                    "{} did not provide basic authorization - rejected",
                      requestIdentifier);
-                Finish(bearerResult.error());
+                //metrics.incrementUnauthenticatedCounter(mRouteName);
+                Finish({grpc::StatusCode::UNAUTHENTICATED,
+                        "No authorization header field specified"});
                 return;
             }
-            auto user = bearerResult->getUser();
-            if (!request.has_old_password())
+            auto user = basicField->first;
+            if (user.empty())
             {
-                Finish({grpc::StatusCode::INVALID_ARGUMENT,
-                        "Old password not set"});
+                Finish({grpc::StatusCode::UNAUTHENTICATED,
+                        "User not set"});
                 return;
             }
+            auto oldPassword = basicField->second;
             if (!request.has_new_password())
             {
                 Finish({grpc::StatusCode::INVALID_ARGUMENT,

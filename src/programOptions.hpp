@@ -13,10 +13,11 @@
 #include <boost/property_tree/ptree_fwd.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include "uEventAnalysisToolBackend/database/credentials.hpp"
+#include "uEventAnalysisToolBackend/auth/administratorLoginAuthorityOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/databaseOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/jsonWebTokenOptions.hpp"
-#include "uEventAnalysisToolBackend/auth/loginAuthorityOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/tokenVerifierOptions.hpp"
+#include "uEventAnalysisToolBackend/auth/userLoginAuthorityOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
 #include "uEventAnalysisToolBackend/grpc/serverOptions.hpp"
@@ -125,7 +126,7 @@ struct ProgramOptions
                  iniFile, "AdminLoginAuthority");
 */
         adminLoginAuthorityOptions
-            = UEAT::Auth::LoginAuthorityOptions::fromInitializationFile(
+            = UEAT::Auth::AdministratorLoginAuthorityOptions::fromInitializationFile(
                  iniFile, "AdminLoginAuthority", std::chrono::minutes {10},
                  applicationName + "-admin-authority");
 /*
@@ -134,7 +135,7 @@ struct ProgramOptions
                  iniFile, "UserLoginAuthority");
 */
         userLoginAuthorityOptions
-            = UEAT::Auth::LoginAuthorityOptions::fromInitializationFile(
+            = UEAT::Auth::UserLoginAuthorityOptions::fromInitializationFile(
                  iniFile, "UserLoginAuthority", std::chrono::minutes {180},
                  applicationName + "-user-authority");
 
@@ -155,9 +156,10 @@ struct ProgramOptions
     UEventAnalysisToolBackend::OTelOptions::GRPCLog otelGRPCLogOptions;
     //UEventAnalysisToolBackend::Database::Credentials backendDatabaseCredentials;
     UEventAnalysisToolBackend::Auth::JSONWebTokenOptions jwtOptions;
-    UEventAnalysisToolBackend::Auth::LoginAuthorityOptions adminLoginAuthorityOptions;
+    UEventAnalysisToolBackend::Auth::AdministratorLoginAuthorityOptions
+        adminLoginAuthorityOptions;
     //UEventAnalysisToolBackend::Database::Credentials adminLoginAuthorityDatabaseCredentials;
-    UEventAnalysisToolBackend::Auth::LoginAuthorityOptions userLoginAuthorityOptions;
+    UEventAnalysisToolBackend::Auth::UserLoginAuthorityOptions userLoginAuthorityOptions;
     //UEventAnalysisToolBackend::Database::Credentials userLoginAuthorityDatabaseCredentials;
     UEventAnalysisToolBackend::Auth::Password::HasherOptions passwordHasherOptions;
     UEventAnalysisToolBackend::Auth::Password::PasswordPolicy passwordPolicy;

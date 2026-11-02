@@ -69,6 +69,7 @@ configure_file(${CMAKE_SOURCE_DIR}/lib/version.hpp.in
 
 set(HEADER_FILES
     include/uEventAnalysisToolBackend/auth/administratorLoginAuthority.hpp
+    include/uEventAnalysisToolBackend/auth/administratorLoginAuthorityOptions.hpp
     include/uEventAnalysisToolBackend/auth/administratorTokenVerifier.hpp
     include/uEventAnalysisToolBackend/auth/authenticator.hpp
     #include/uEventAnalysisToolBackend/auth/authNZ.hpp
@@ -77,8 +78,8 @@ set(HEADER_FILES
     #include/uEventAnalysisToolBackend/auth/grpc.hpp
     include/uEventAnalysisToolBackend/auth/jsonWebToken.hpp
     include/uEventAnalysisToolBackend/auth/jsonWebTokenOptions.hpp
-    include/uEventAnalysisToolBackend/auth/loginAuthority.hpp
-    include/uEventAnalysisToolBackend/auth/loginAuthorityOptions.hpp
+    #include/uEventAnalysisToolBackend/auth/loginAuthority.hpp
+    #include/uEventAnalysisToolBackend/auth/loginAuthorityOptions.hpp
     #include/uEventAnalysisToolBackend/auth/tokenVerifier.hpp
     include/uEventAnalysisToolBackend/auth/tokenVerifierOptions.hpp
     include/uEventAnalysisToolBackend/auth/userLoginAuthority.hpp
@@ -114,6 +115,7 @@ set(WILL_BE_DELETED_HEADER_FILES
     include/uEventAnalysisToolBackend/database/aqms/streamIdentifier.hpp)
 set(LIBRARY_SRC
     lib/auth/administratorLoginAuthority.cpp
+    lib/auth/administratorLoginAuthorityOptions.cpp
     lib/auth/administratorTokenVerifier.cpp
     lib/auth/authenticator.cpp
     #lib/auth/authNZ.cpp
@@ -123,8 +125,9 @@ set(LIBRARY_SRC
     lib/auth/jsonWebToken.cpp
     lib/auth/jsonWebTokenOptions.cpp
     #lib/auth/loginAuthority.cpp
-    lib/auth/loginAuthorityOptions.cpp
+    #lib/auth/loginAuthorityOptions.cpp
     lib/auth/userLoginAuthority.cpp
+    lib/auth/userLoginAuthorityOptions.cpp
     lib/auth/userTokenVerifier.cpp
     #lib/auth/tokenVerifier.cpp
     lib/auth/tokenVerifierOptions.cpp

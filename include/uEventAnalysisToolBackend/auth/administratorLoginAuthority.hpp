@@ -7,7 +7,7 @@
 #include <uEventAnalysisToolBackend/auth/authenticator.hpp>
 namespace UEventAnalysisToolBackend::Auth
 {
- class LoginAuthorityOptions;
+ class AdministratorLoginAuthorityOptions;
 }
 namespace UEventAnalysisToolBackend::Auth
 {
@@ -24,7 +24,7 @@ public:
     /// @param[in] logger    The application logger.
     /// @throws std::invalid_argument if the database is null, the
     ///         algorithm is unsigned, or there is no private key.
-    AdministratorLoginAuthority(const LoginAuthorityOptions &options,
+    AdministratorLoginAuthority(const AdministratorLoginAuthorityOptions &options,
                                 std::shared_ptr<spdlog::logger> logger); 
 
     /// @result True indicates the class is initialized.

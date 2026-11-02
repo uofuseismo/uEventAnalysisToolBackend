@@ -7,7 +7,6 @@
 #include <uEventAnalysisToolBackend/auth/authenticator.hpp>
 namespace UEventAnalysisToolBackend::Auth
 {
- class LoginAuthorityOptions;
  class UserLoginAuthorityOptions;
 }
 namespace UEventAnalysisToolBackend::Auth
@@ -35,7 +34,7 @@ public:
     /// @param[in] logger    The application logger.
     /// @throws std::invalid_argument if the database is null, the
     ///         algorithm is unsigned, or there is no private key.
-    UserLoginAuthority(const LoginAuthorityOptions &options,
+    UserLoginAuthority(const UserLoginAuthorityOptions &options,
                        std::shared_ptr<spdlog::logger> logger); 
 
     /// @result True indicates that the authority is initialized.

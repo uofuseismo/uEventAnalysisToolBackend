@@ -138,7 +138,7 @@ public:
 
     /// @brief Runs f(transaction) under the lock.  On a broken connection,
     ///        reconnects and retries once.  f must commit.
-    template<typename F>
+    template<typename Transaction, typename F>
     decltype(auto) withTransaction(F &&f)
     {
         const std::scoped_lock lock(mDatabaseMutex);
@@ -152,7 +152,7 @@ public:
                 {
                     connectLocked();  // connect() minus its own locking
                 }
-                pqxx::work transaction(*mConnection);
+                Transaction transaction(*mConnection);
                 return f(transaction);
             }
             catch (const pqxx::broken_connection &e)

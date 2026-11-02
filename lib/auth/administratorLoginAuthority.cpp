@@ -13,10 +13,10 @@
 #include <jwt-cpp/traits/boost-json/traits.h>
 #include <pqxx/pqxx>
 #include "uEventAnalysisToolBackend/auth/administratorLoginAuthority.hpp"
+#include "uEventAnalysisToolBackend/auth/administratorLoginAuthorityOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/authenticator.hpp"
 //#include "uEventAnalysisToolBackend/auth/database.hpp"
 //#include "uEventAnalysisToolBackend/auth/databaseOptions.hpp"
-#include "uEventAnalysisToolBackend/auth/loginAuthorityOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/hasher.hpp"
 //#include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
 //#include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
@@ -29,7 +29,7 @@ class AdministratorLoginAuthority::AdministratorLoginAuthorityImpl :
 {
 public:
     AdministratorLoginAuthorityImpl(
-        const LoginAuthorityOptions &options,
+        const AdministratorLoginAuthorityOptions &options,
         std::shared_ptr<spdlog::logger> logger) :
         Detail::DatabaseConnection::Database
         {
@@ -90,7 +90,7 @@ public:
              .set_expires_in(expiration);
         token.set_payload_claim("scope", "administrator");
         if (mOptions.getAlgorithm() ==
-            LoginAuthorityOptions::Algorithm::EdDSA25519)
+            AdministratorLoginAuthorityOptions::Algorithm::EdDSA25519)
         {
             const std::string publicKeyPassword{""};
             const std::string privateKeyPassword{""};
@@ -118,8 +118,8 @@ public:
         }   
         constexpr std::string_view query{"SELECT auth.get_password_hash($1)"};
         const pqxx::params parameters{user};
-        return withTransaction(
-            [&](pqxx::work &transaction) -> std::optional<std::string>
+        return withTransaction<pqxx::read_transaction>(
+            [&](pqxx::read_transaction &transaction) -> std::optional<std::string>
             {
                 auto row = transaction.exec(query, parameters).one_row();
                 // Null indicates no user
@@ -133,8 +133,8 @@ public:
     {   
         constexpr std::string_view query{"SELECT auth.user_is_admin($1)"};
         const pqxx::params parameters{user};
-        return withTransaction(
-            [&](pqxx::work &transaction) -> bool
+        return withTransaction<pqxx::read_transaction>(
+            [&](pqxx::read_transaction &transaction) -> bool
             {
                 auto row = transaction.exec(query, parameters).one_row();
                 const auto isAdmin = row.at(0).as<bool> (); 
@@ -148,7 +148,7 @@ public:
     {
         constexpr std::string_view query{"SELECT auth.record_login($1)"};
         const pqxx::params parameters{user};
-        return withTransaction(
+        return withTransaction<pqxx::work>(
             [&](pqxx::work &transaction) -> bool
             {
                 auto row = transaction.exec(query, parameters).one_row();
@@ -206,15 +206,14 @@ public:
         return IAuthenticator::Result::ServerError;
     }
 
-
-    LoginAuthorityOptions mOptions;
+    AdministratorLoginAuthorityOptions mOptions;
     bool mInitialized{false};
 };
 
 /// Constructor
 AdministratorLoginAuthority::AdministratorLoginAuthority
 (
-    const LoginAuthorityOptions &options,
+    const AdministratorLoginAuthorityOptions &options,
     std::shared_ptr<spdlog::logger> logger
 ) :
     pImpl(std::make_unique<AdministratorLoginAuthorityImpl> 

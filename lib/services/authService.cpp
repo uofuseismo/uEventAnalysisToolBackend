@@ -11,6 +11,7 @@
 #include <grpcpp/support/server_callback.h>
 #include <grpcpp/support/status.h>
 #include "uEventAnalysisToolBackend/services/authService.hpp"
+#include "uEventAnalysisToolBackend/auth/authenticator.hpp"
 #include "uEventAnalysisToolBackend/auth/userLoginAuthority.hpp"
 #include "uEventAnalysisToolBackend/auth/userTokenVerifier.hpp"
 #include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
@@ -135,7 +136,44 @@ grpc::ServerUnaryReactor
                 Finish(userNameAndPassword.error());
                 return;
             }
-           
+            auto loginResult
+                = loginAuthority->loginWithPassword(*userNameAndPassword);
+            if (loginResult.has_value())
+            {
+                SPDLOG_LOGGER_INFO(mLogger, 
+                    "Processed {}; {} logged in",
+                    requestIdentifier,
+                    userNameAndPassword->first); 
+                response->set_json_web_token(*loginResult);
+            }
+            else
+            {
+                if (loginResult.error() ==
+                    Auth::IAuthenticator::Result::InvalidCredentials)
+                {
+                    SPDLOG_LOGGER_WARN(mLogger,
+                        "Rejected {}; {} provided invalid credentials",
+                        requestIdentifier,
+                        userNameAndPassword->first);
+                    //metrics.incrementUnauthenticatedCounter(mRouteName);
+                    Finish({grpc::StatusCode::UNAUTHENTICATED,
+                           "Invalid credentials"});
+                    return;
+                }
+                else if (loginResult.error() ==
+                         Auth::IAuthenticator::Result::ServerError)
+                {
+                    SPDLOG_LOGGER_ERROR(mLogger,
+                        "Failed to process {}; could not auth {}",
+                        requestIdentifier,
+                        userNameAndPassword->first);
+                }
+                //metrics.incrementServerErrorCounter(mRouteName);
+                Finish({grpc::StatusCode::INTERNAL,
+                        "Server error during login - contact maintainer"});
+                return;
+            }
+ 
             mSuccess = true;
             Finish(grpc::Status::OK);
             SPDLOG_LOGGER_DEBUG(

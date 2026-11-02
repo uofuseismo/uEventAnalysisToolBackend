@@ -127,7 +127,8 @@ struct ProgramOptions
 */
         adminLoginAuthorityOptions
             = UEAT::Auth::AdministratorLoginAuthorityOptions::fromInitializationFile(
-                 iniFile, "AdminLoginAuthority", std::chrono::minutes {10},
+                 iniFile,
+                 "AdminLoginAuthority",
                  applicationName + "-admin-authority");
 /*
         userLoginAuthorityDatabaseCredentials
@@ -136,7 +137,7 @@ struct ProgramOptions
 */
         userLoginAuthorityOptions
             = UEAT::Auth::UserLoginAuthorityOptions::fromInitializationFile(
-                 iniFile, "UserLoginAuthority", std::chrono::minutes {180},
+                 iniFile, "UserLoginAuthority",
                  applicationName + "-user-authority");
 
         jwtOptions

@@ -112,7 +112,6 @@ public:
     [[nodiscard]] static UserLoginAuthorityOptions 
         fromInitializationFile(const std::filesystem::path &iniFile,
                                const std::string &section,
-                               const std::chrono::minutes &defaultTokenTimeToLive,
                                const std::string &defaultIssuer);
 private:
     class UserLoginAuthorityOptionsImpl;

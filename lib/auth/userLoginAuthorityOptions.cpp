@@ -287,13 +287,8 @@ static loadStringFromFile(const std::filesystem::path &path)
 UserLoginAuthorityOptions UserLoginAuthorityOptions::fromInitializationFile(
     const std::filesystem::path &iniFile,
     const std::string &sectionIn,
-    const std::chrono::minutes &defaultTokenTimeToLive,
     const std::string &defaultIssuer)
 {
-    if (defaultTokenTimeToLive.count() <= 0)
-    {
-        throw std::invalid_argument("Default token TTL is not positive");
-    }
     if (defaultIssuer.empty())
     {
         throw std::invalid_argument("Deafult issuer is empty");
@@ -331,8 +326,7 @@ UserLoginAuthorityOptions UserLoginAuthorityOptions::fromInitializationFile(
         = propertyTree.get<std::string> (section + "jwtIssuer", defaultIssuer);
     result.setIssuer(issuer);
 
-    int jwtTTLInMinutes
-        = static_cast<int> (defaultTokenTimeToLive.count());
+    int jwtTTLInMinutes{240};
     jwtTTLInMinutes
         = propertyTree.get<int> (section + "jwtTimeToLiveInMinutes",
                                  jwtTTLInMinutes);

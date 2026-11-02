@@ -217,7 +217,7 @@ public:
             });
     }
 
-    // Check the users password
+    // Check the user's password
     [[nodiscard]] IAuthenticator::Result authenticateByUserNameAndPassword(
         const std::pair<std::string, std::string> &userAndPassword)
     {   
@@ -342,6 +342,13 @@ UserLoginAuthority::changePassword(
     const std::pair<std::string, std::string> &userNameAndPassword,
     const std::string &newPassword)
 {
+    if (!isInitialized())
+    {       
+        SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+                            "UserLoginAuthority not initialized");
+        return std::unexpected(
+           UserLoginAuthority::ChangePasswordError::ServerError);
+    }   
     // Validate the new password
     auto policy = pImpl->mOptions.getPasswordPolicy();
     auto validationResult
@@ -374,9 +381,9 @@ UserLoginAuthority::changePassword(
             ChangePasswordError::PasswordsMatch);
     }
 
-    // Make the user login
-    auto loginResult = loginWithPassword(userNameAndPassword);
-    if (loginResult.has_value())
+    // Check user's password (but not do a full login)
+    auto verifyPasswordResult = verifyPassword(userNameAndPassword);
+    if (verifyPasswordResult.has_value())
     {
         try
         {
@@ -413,13 +420,46 @@ UserLoginAuthority::changePassword(
     }
     else
     {
-        if (loginResult.error() == IAuthenticator::Result::InvalidCredentials)
+        if (verifyPasswordResult.error() ==
+            IAuthenticator::Result::InvalidCredentials)
         {
             return std::unexpected(ChangePasswordError::Unauthenticated);
         }
         return std::unexpected(ChangePasswordError::ServerError);
     }
     return {};
+}
+
+/// Verify password
+std::expected<void, IAuthenticator::Result>
+UserLoginAuthority::verifyPassword(
+    const std::pair<std::string, std::string> &userNameAndPassword) const
+{
+    if (!isInitialized())
+    {       
+        SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+                            "UserLoginAuthority not initialized");
+        return std::unexpected(IAuthenticator::Result::ServerError);
+    }   
+    auto user = userNameAndPassword.first;
+    auto password = userNameAndPassword.second;
+    auto hashedPassword = pImpl->getHashedPasswordFromDatabase(user);
+    if (hashedPassword != std::nullopt)
+    {
+        if (Password::Hasher::verify(password, *hashedPassword))
+        {
+            return {};
+        }
+        SPDLOG_LOGGER_DEBUG(pImpl->mLogger, "{} passwords do not match", user);
+        return std::unexpected(IAuthenticator::Result::InvalidCredentials);
+    }
+    else
+    {   
+        SPDLOG_LOGGER_WARN(pImpl->mLogger, "{} not in database", user);
+        return std::unexpected(IAuthenticator::Result::InvalidCredentials);
+    }   
+    SPDLOG_LOGGER_ERROR(pImpl->mLogger, "Unhandled verify password workflow");
+    return std::unexpected(IAuthenticator::Result::ServerError);
 }
 
 

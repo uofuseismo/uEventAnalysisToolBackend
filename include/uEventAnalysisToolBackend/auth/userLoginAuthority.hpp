@@ -72,9 +72,9 @@ public:
     /// @brief Checks a password without minting a token.  This is for
     ///        changing a password and changing a key which demand the
     ///        user provide their password.
-    /// @result On success, the user name.
-    [[nodiscard]] std::expected<std::string, IAuthenticator::Result>
-        verifyPassword(const std::pair<std::string, std::string> &userNameAndPassword) const;
+    [[nodiscard]] auto verifyPassword(
+         const std::pair<std::string, std::string> &userNameAndPassword) const
+         -> std::expected<void, IAuthenticator::Result>;
 
     /// @result The password policy.
     /// @note This is a convenience function to benefit an RPC.

@@ -8,6 +8,10 @@
 namespace UEventAnalysisToolBackend::Auth
 {
  class UserLoginAuthorityOptions;
+ namespace Password
+ {
+  class PasswordPolicy;
+ }
 }
 namespace UEventAnalysisToolBackend::Auth
 {
@@ -62,8 +66,8 @@ public:
     /// @result On success, this mints a new user token - i.e., this is
     ///         not an admin token and cannot be used in administartor
     ///         routes.
-    [[nodiscard]] std::expected<std::string, IAuthenticator::Result>
-        loginWithKey(const std::pair<std::string, std::string> &userNameAndKey) const; 
+    // [[nodiscard]] std::expected<std::string, IAuthenticator::Result>
+    //    loginWithKey(const std::pair<std::string, std::string> &userNameAndKey) const; 
 
     /// @brief Checks a password without minting a token.  This is for
     ///        changing a password and changing a key which demand the
@@ -71,6 +75,12 @@ public:
     /// @result On success, the user name.
     [[nodiscard]] std::expected<std::string, IAuthenticator::Result>
         verifyPassword(const std::pair<std::string, std::string> &userNameAndPassword) const;
+
+    /// @result The password policy.
+    /// @note This is a convenience function to benefit an RPC.
+    /// @throws std::runtime_error if \c isInitialized() is false.
+    [[nodiscard]] Password::PasswordPolicy getPasswordPolicy() const;
+
 
     /// @brief Destructor
     ~UserLoginAuthority();

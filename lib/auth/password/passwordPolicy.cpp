@@ -1,4 +1,6 @@
 #include <algorithm>
+#include <cctype>
+#include <expected>
 #include <filesystem>
 #include <iterator>
 #include <memory>
@@ -223,7 +225,7 @@ std::string PasswordPolicy::createTemporaryPassword() const noexcept
             std::uniform_int_distribution<>
                 specialDistribution(0, static_cast<int> (::SPECIAL.size()));
             for (auto s : samples)
-            {   
+            {
                 auto j = specialDistribution(generator);
                 password[s] = ::SPECIAL[j];
             }
@@ -249,6 +251,55 @@ PasswordPolicy::toMessage() const noexcept
     response.set_requires_special_character(requiresSpecialCharacter());
     response.set_new_and_old_password_must_differ(newAndOldPasswordMustDiffer());
     return response;
+}
+
+/// Validate
+PasswordPolicy::ValidationResult
+PasswordPolicy::validate(
+    const std::pair<std::string, std::string> &newAndOldPassword) const noexcept
+{
+    if (newAndOldPasswordMustDiffer() &&
+        newAndOldPassword.first == newAndOldPassword.second)
+    {
+        return ValidationResult::PasswordsMatch;
+    }
+    auto password = newAndOldPassword.first;
+    auto length = static_cast<int> (password.length());
+    auto [minLength, maxLength] = getMinimumAndMaximumLength();
+    if (length < minLength)
+    {
+        return ValidationResult::TooShort;
+    }
+    if (length > maxLength)
+    {
+        return ValidationResult::TooLong;
+    }
+    if (requiresNumber())
+    {
+        const bool hasDigit
+            = std::ranges::any_of(password,
+                                  [](const char c)
+                                  {
+                                      return c >= '0' && c <= '9';
+                                  });
+        if (!hasDigit){return ValidationResult::NoNumber;}
+    }
+    if (requiresSpecialCharacter())
+    {
+        constexpr std::string_view specialCharacters
+            {R"(!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~)"};
+        const bool hasSpecial
+            = std::ranges::any_of(password,
+                                  [&](const char c)
+                                  {
+                                       return specialCharacters.contains(c);
+                                  });
+        if (!hasSpecial)
+        {
+            return ValidationResult::NoSpecialCharacter;
+        }
+    }
+    return ValidationResult::Valid;
 }
 
 PasswordPolicy PasswordPolicy::fromInitializationFile(

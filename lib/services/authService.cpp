@@ -133,6 +133,7 @@ grpc::ServerUnaryReactor
                 SPDLOG_LOGGER_WARN(mLogger,
                      "{} provided malformed credentials - rejected",
                      requestIdentifier);
+                //metrics.incrementUnauthenticatedCounter(mRouteName);
                 Finish(userNameAndPassword.error());
                 return;
             }
@@ -175,11 +176,11 @@ grpc::ServerUnaryReactor
             }
  
             mSuccess = true;
-            Finish(grpc::Status::OK);
             SPDLOG_LOGGER_DEBUG(
                 mLogger,
                 "{} successfully logged in with password",
                 requestIdentifier);
+            Finish(grpc::Status::OK);
         }
 
     private:
@@ -243,7 +244,6 @@ grpc::ServerUnaryReactor
                 grpc::CallbackServerContext *context,
                 const UAuthV1::ChangePasswordRequest &request,
                 UAuth::UserLoginAuthority &loginAuthority,
-                const UAuth::UserTokenVerifier &tokenVerifier,
                 std::shared_ptr<spdlog::logger> logger) :
             mLogger(std::move(logger))
         {
@@ -260,24 +260,38 @@ grpc::ServerUnaryReactor
                         "No authorization header field specified"});
                 return;
             }
-            auto user = basicField->first;
+            auto userNameAndPassword
+                = GRPC::authorizationHeaderToUserNameAndPassword(
+                     basicField->second);
+            if (!userNameAndPassword.has_value())
+            {
+                SPDLOG_LOGGER_WARN(mLogger,
+                     "{} provided malformed credentials - rejected",
+                     requestIdentifier);
+                //metrics.incrementUnauthenticatedCounter(mRouteName);
+                Finish(userNameAndPassword.error());
+                return;
+            }
+
+            const auto &user = userNameAndPassword->first;
             if (user.empty())
             {
                 Finish({grpc::StatusCode::UNAUTHENTICATED,
                         "User not set"});
                 return;
             }
-            auto oldPassword = basicField->second;
+            const auto &oldPassword = userNameAndPassword->second;
             if (!request.has_new_password())
             {
                 Finish({grpc::StatusCode::INVALID_ARGUMENT,
                         "New password not set"});
+                //metrics.incrementClientErrorCounter(mRouteName);
                 return;
             }
             const std::pair<std::string, std::string> currentCredentials
             {
                 user,
-                request.old_password()
+                oldPassword
             };
             const auto &newPassword{request.new_password()};
             auto changeResult
@@ -336,11 +350,11 @@ grpc::ServerUnaryReactor
             }
 
             mSuccess = true;
-            Finish(grpc::Status::OK);
             SPDLOG_LOGGER_DEBUG(
                 mLogger,
                 "{} successfully changed password",
                 requestIdentifier);
+            Finish(grpc::Status::OK);
         };
 
     private:
@@ -385,7 +399,6 @@ grpc::ServerUnaryReactor
                        context,
                        *request,
                        *pImpl->mLoginAuthority,
-                       *pImpl->mTokenVerifier,
                        pImpl->mLogger);
     
 }   
@@ -409,31 +422,14 @@ grpc::ServerUnaryReactor
                 std::shared_ptr<spdlog::logger> logger) :
             mLogger(std::move(logger))
         {
-            auto requestIdentifier = GRPC::toRequestIdentifier(*context);
-            auto bearerResult = GRPC::requireBearer(*context, tokenVerifier);
-            if (!bearerResult.has_value())
-            {
-                //metrics.incrementUnauthenticatedCounter(mRouteName);
-                SPDLOG_LOGGER_WARN(mLogger,
-                    "{} did not provide bearer authorization - rejected",
-                     requestIdentifier);
-                Finish(bearerResult.error());
-                return; 
-            }             
-
-            auto minAndMaxLength = policy.getMinimumAndMaximumLength();
-            response->set_minimum_length(minAndMaxLength.first);
-            response->set_maximum_length(minAndMaxLength.second);
-            response->set_requires_number(policy.requiresNumber());
-            response->set_requires_special_character(policy.requiresSpecialCharacter());
-            response->set_new_and_old_password_must_differ(policy.newAndOldPasswordMustDiffer());
+            *response = policy.toMessage<UAuthV1::PasswordRequirements> ();
 
             mSuccess = true;
-            Finish(grpc::Status::OK);
             SPDLOG_LOGGER_DEBUG(
                 mLogger,
-                "{} successfully retrieved password requirements",
-                requestIdentifier);
+                "Successfully retrieved password requirement for request {}",
+                GRPC::toRequestIdentifier(*context));
+            Finish(grpc::Status::OK);
         }
     private:
         void OnDone() override
@@ -473,8 +469,7 @@ grpc::ServerUnaryReactor
         const std::string mRouteName{"GetPasswordRequirements"};
         bool mSuccess{false};
     };
-// TODO fix here
-UAuth::Password::PasswordPolicy policy;
+    auto policy = pImpl->mLoginAuthority->getPasswordPolicy();
     return new Reactor(response,
                        context,
                        *request,

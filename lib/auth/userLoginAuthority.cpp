@@ -19,6 +19,7 @@
 #include "uEventAnalysisToolBackend/auth/userLoginAuthorityOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/hasher.hpp"
 #include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
+#include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
 #include "databaseUtilities.hpp"
 
 using namespace UEventAnalysisToolBackend::Auth;
@@ -32,7 +33,7 @@ public:
         std::shared_ptr<spdlog::logger> logger) :
         Detail::DatabaseConnection::Database
         {
-            "UserLoginAdministratorConsole",
+            "UserLoginAuthorityConsole",
             options.getDatabaseCredentials(),
             std::move(logger)
         },
@@ -276,6 +277,16 @@ bool UserLoginAuthority::isInitialized() const noexcept
     return pImpl->mInitialized;
 }
 
+/// Get the password policy
+Password::PasswordPolicy UserLoginAuthority::getPasswordPolicy() const
+{
+    if (!isInitialized()) 
+    {
+        throw std::runtime_error("Class not initialized");
+    }
+    return pImpl->mOptions.getPasswordPolicy();
+}
+
 /// Login with password and get a token
 std::expected<std::string, IAuthenticator::Result>
 UserLoginAuthority::loginWithPassword(
@@ -331,11 +342,38 @@ UserLoginAuthority::changePassword(
     const std::pair<std::string, std::string> &userNameAndPassword,
     const std::string &newPassword)
 {
-    // New password can't be empty
-    if (newPassword.empty())
+    // Validate the new password
+    auto policy = pImpl->mOptions.getPasswordPolicy();
+    auto validationResult
+        = policy.validate(std::pair {newPassword, userNameAndPassword.second});
+    if (validationResult ==
+        Password::PasswordPolicy::ValidationResult::TooShort)
     {
         return std::unexpected(ChangePasswordError::PasswordTooShort);
     }
+    else if (validationResult ==
+             Password::PasswordPolicy::ValidationResult::TooLong)
+    {
+        return std::unexpected(ChangePasswordError::PasswordTooLong);
+    }
+    else if (validationResult ==
+             Password::PasswordPolicy::ValidationResult::NoNumber)
+    {
+        return std::unexpected(ChangePasswordError::PasswordNeedsNumber);
+    }
+    else if (validationResult ==
+             Password::PasswordPolicy::ValidationResult::NoSpecialCharacter)
+    {
+        return std::unexpected(
+            ChangePasswordError::PasswordNeedsSpecialCharacter);
+    }
+    else if (validationResult ==
+             Password::PasswordPolicy::ValidationResult::PasswordsMatch)
+    {
+        return std::unexpected(
+            ChangePasswordError::PasswordsMatch);
+    }
+
     // Make the user login
     auto loginResult = loginWithPassword(userNameAndPassword);
     if (loginResult.has_value())
@@ -347,9 +385,23 @@ UserLoginAuthority::changePassword(
             {
                 SPDLOG_LOGGER_ERROR(pImpl->mLogger,
                                     "Resulting hashed password is empty");
+                return std::unexpected(ChangePasswordError::ServerError);
             }
-//            return pImpl->changePassword(
-//                std::pair {userNameAndPassword.first, hashedPassword});
+            auto wasSuccess = pImpl->changePassword(
+                  std::pair {userNameAndPassword.first, hashedPassword}); 
+            if (!wasSuccess)
+            {
+                SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+                                    "Failed to update password for {}",
+                                    userNameAndPassword.first);
+                return std::unexpected(ChangePasswordError::ServerError);
+            }
+            else
+            {
+                SPDLOG_LOGGER_INFO(pImpl->mLogger,
+                                   "{} updated password",
+                                   userNameAndPassword.first);
+            }
         }
         catch (const std::exception &e)
         {
@@ -365,12 +417,9 @@ UserLoginAuthority::changePassword(
         {
             return std::unexpected(ChangePasswordError::Unauthenticated);
         }
-        else if (loginResult.error() == IAuthenticator::Result::ServerError)
-        {
-            return std::unexpected(ChangePasswordError::PasswordTooShort);
-        }
-        return std::unexpected(ChangePasswordError::PasswordTooShort);
+        return std::unexpected(ChangePasswordError::ServerError);
     }
+    return {};
 }
 
 

@@ -41,7 +41,7 @@ public:
         std::shared_ptr<spdlog::logger> logger
     ) :
         mLoginAuthority(std::move(loginAuthority)),
-        mAdminTokenVerifier(std::move(adminTokenVerifier)),
+        mAdministratorTokenVerifier(std::move(adminTokenVerifier)),
         mUserTokenVerifier(std::move(userTokenVerifier)),
         mLogger(std::move(logger))
     {
@@ -53,11 +53,11 @@ public:
         {
             throw std::invalid_argument("Login authority not initialized");
         }
-        if (mAdminTokenVerifier == nullptr)
+        if (mAdministratorTokenVerifier == nullptr)
         {
             throw std::invalid_argument("Admin token verifier is null");
         }
-        if (!mAdminTokenVerifier->isInitialized())
+        if (!mAdministratorTokenVerifier->isInitialized())
         {
             throw std::invalid_argument("Admin token verifier not initialized");
         }
@@ -85,7 +85,7 @@ public:
     std::shared_ptr<UAuth::AdministratorLoginAuthority>
         mLoginAuthority{nullptr};
     std::shared_ptr<UAuth::AdministratorTokenVerifier>
-        mAdminTokenVerifier{nullptr};
+        mAdministratorTokenVerifier{nullptr};
     std::shared_ptr<UAuth::UserTokenVerifier>
         mUserTokenVerifier{nullptr};
     std::shared_ptr<spdlog::logger> mLogger{nullptr};
@@ -191,11 +191,11 @@ grpc::ServerUnaryReactor
             }
            
             mSuccess = true;
-            Finish(grpc::Status::OK);
             SPDLOG_LOGGER_DEBUG(
                 mLogger,
                 "{} successfully logged in with password",
                 requestIdentifier);
+            Finish(grpc::Status::OK);
         }
 
     private:
@@ -259,12 +259,12 @@ grpc::ServerUnaryReactor
                 grpc::CallbackServerContext *context,
                 const UAdminV1::CreateUserRequest &request,
                 UAuth::AdministratorLoginAuthority &loginAuthority,
-                const UAuth::UserTokenVerifier &userTokenVerifier,
+                const UAuth::AdministratorTokenVerifier &adminTokenVerifier,
                 std::shared_ptr<spdlog::logger> logger) :
             mLogger(std::move(logger))
         {
             auto requestIdentifier = GRPC::toRequestIdentifier(*context);
-            auto bearerResult = GRPC::requireBearer(*context, userTokenVerifier);
+            auto bearerResult = GRPC::requireBearer(*context, adminTokenVerifier);
             if (!bearerResult.has_value())
             {
                 //metrics.incrementUnauthenticatedCounter(mRouteName);
@@ -278,11 +278,11 @@ grpc::ServerUnaryReactor
             auto adminUser = bearerResult->getUser();
 
             mSuccess = true;
-            Finish(grpc::Status::OK);
             SPDLOG_LOGGER_DEBUG(
                 mLogger,
                 "{} successfully logged in with password",
                 requestIdentifier);
+            Finish(grpc::Status::OK);
         }
 
     private:
@@ -328,7 +328,7 @@ grpc::ServerUnaryReactor
                        context,
                        *request,
                        *pImpl->mLoginAuthority,
-                       *pImpl->mUserTokenVerifier,
+                       *pImpl->mAdministratorTokenVerifier,
                        pImpl->mLogger);
 }
 

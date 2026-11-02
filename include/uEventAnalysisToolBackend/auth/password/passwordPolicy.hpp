@@ -1,8 +1,10 @@
 #ifndef UEVENT_ANALYSIS_TOOL_BACKEND_AUTH_PASSWORD_POLICY_HPP
 #define UEVENT_ANALYSIS_TOOL_BACKEND_AUTH_PASSWORD_POLICY_HPP
 #include <cstddef>
+#include <expected>
 #include <filesystem>
 #include <memory>
+#include <string>
 #include <utility>
 
 namespace UEventAnalysisToolBackend::Auth::Password
@@ -14,6 +16,17 @@ namespace UEventAnalysisToolBackend::Auth::Password
 ///            MIT NO AI license.
 class PasswordPolicy
 {
+public:
+    /// @brief Defines outcome of a password validation.
+    enum class ValidationResult
+    {
+        Valid,     /*!< Proposed password is good to go. */
+        TooShort,  /*!< Too short. */
+        TooLong,   /*!< Too long. */
+        NoNumber,  /*!< Lacks a number. */
+        NoSpecialCharacter, /*!< Lacks a special character. */ 
+        PasswordsMatch      /*!< The new and old password match. */ 
+    };
 public:
     /// @brief Constructor.
     PasswordPolicy();
@@ -60,6 +73,9 @@ public:
 
     /// @brief Utility to create a random password based on the current rules.
     [[nodiscard]] std::string createTemporaryPassword() const noexcept;
+
+    /// @brief Validates a proposed password.
+    [[nodiscard]] ValidationResult validate(const std::pair<std::string, std::string> &newAndOldPassword) const noexcept;
 
     /// @brief Creates the user password policy from an initialization file.
     /// @throws std::invalid_argument if the ini file path does not exist.

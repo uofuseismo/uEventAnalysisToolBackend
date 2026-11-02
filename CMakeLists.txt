@@ -76,12 +76,12 @@ set(HEADER_FILES
     include/uEventAnalysisToolBackend/auth/database.hpp
     include/uEventAnalysisToolBackend/auth/databaseOptions.hpp
     #include/uEventAnalysisToolBackend/auth/grpc.hpp
-    include/uEventAnalysisToolBackend/auth/jsonWebToken.hpp
-    include/uEventAnalysisToolBackend/auth/jsonWebTokenOptions.hpp
+    #include/uEventAnalysisToolBackend/auth/jsonWebToken.hpp
+    #include/uEventAnalysisToolBackend/auth/jsonWebTokenOptions.hpp
     #include/uEventAnalysisToolBackend/auth/loginAuthority.hpp
     #include/uEventAnalysisToolBackend/auth/loginAuthorityOptions.hpp
     #include/uEventAnalysisToolBackend/auth/tokenVerifier.hpp
-    include/uEventAnalysisToolBackend/auth/tokenVerifierOptions.hpp
+    #include/uEventAnalysisToolBackend/auth/tokenVerifierOptions.hpp
     include/uEventAnalysisToolBackend/auth/userLoginAuthority.hpp
     include/uEventAnalysisToolBackend/auth/userLoginAuthorityOptions.hpp
     include/uEventAnalysisToolBackend/auth/password/hasher.hpp
@@ -122,8 +122,8 @@ set(LIBRARY_SRC
     lib/auth/database.cpp
     lib/auth/databaseOptions.cpp
     #lib/auth/grpc.cpp
-    lib/auth/jsonWebToken.cpp
-    lib/auth/jsonWebTokenOptions.cpp
+    #lib/auth/jsonWebToken.cpp
+    #lib/auth/jsonWebTokenOptions.cpp
     #lib/auth/loginAuthority.cpp
     #lib/auth/loginAuthorityOptions.cpp
     lib/auth/userLoginAuthority.cpp

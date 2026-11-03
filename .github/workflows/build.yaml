@@ -1,0 +1,178 @@
+name: Build
+run-name: Build and test ${{ github.ref_name }}
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # A manual trigger, for when a runner or Conan Center was down rather
+  # than the code being wrong.
+  workflow_dispatch:
+
+# A newer push to the same branch supersedes this one.  Safe while the
+# pipeline only builds and tests; revisit when it pushes images, where a
+# run cut off mid-push leaves a tag half-written.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUILD_TYPE: Release
+  # Whatever clang the image ships.  The language version is what the
+  # code depends on, and that is pinned below with compiler.cppstd.
+  CC: clang
+  CXX: clang++
+
+jobs:
+  build:
+    runs-on: ${{ matrix.distro }}
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [ubuntu-26.04]
+    name: Build on ${{ matrix.distro }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - run: pip install conan
+
+      - name: Prepare build environment
+        uses: ./.github/actions/prepare-build-environment
+
+      # gRPC, Boost, and OpenTelemetry from source take most of an hour,
+      # so the Conan cache is what makes this pipeline usable.  The key
+      # covers the image and the compiler: a new clang in the image
+      # means different binaries, and --build=missing rebuilds them.
+      - name: Compute Conan cache key
+        id: conan-key
+        run: |
+          compiler=$(${CXX} -dumpversion)
+          echo "key=conan-${{ matrix.distro }}-clang${compiler}-${BUILD_TYPE}-${{ hashFiles('conanfile.py') }}" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore Conan cache
+        id: conan-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ~/.conan2
+          key: ${{ steps.conan-key.outputs.key }}
+
+      - name: Create default profile with Ninja generator
+        run: |
+          conan profile detect --force
+          {
+            echo ""
+            echo "[conf]"
+            echo "tools.cmake.cmaketoolchain:generator=Ninja"
+          } >> ~/.conan2/profiles/default
+          cat ~/.conan2/profiles/default
+
+      - name: Install Conan dependencies
+        run: |
+          conan install . --build=missing \
+                -s:a build_type=${BUILD_TYPE} \
+                -s:a compiler.cppstd=23 \
+                --output-folder .
+
+      # Saved straight after the install, not at the end of the job: the
+      # cache action only saves on success, and a failing build must not
+      # throw away an hour of dependency builds.
+      - name: Save Conan cache
+        if: ${{ steps.conan-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v5
+        with:
+          path: ~/.conan2
+          key: ${{ steps.conan-key.outputs.key }}
+
+      # clang-tidy runs as part of the compile, so a lint error fails the
+      # build.  version.hpp is generated into the build directory, so it
+      # travels with the artifact - nothing to copy.
+      - name: Configure preset and build
+        run: |
+          cmake --preset conan-release -DWITH_CONAN=ON -DUSE_CLANG_TIDY=ON
+          cmake --build --preset conan-release
+          cp CMakeUserPresets.json build
+
+      - name: Upload build directory
+        uses: ./.github/actions/upload-build-directory
+
+  test:
+    needs: build
+    runs-on: ${{ matrix.distro }}
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [ubuntu-26.04]
+    name: Test on ${{ matrix.distro }}
+
+    # A throwaway server for the [.integration] tests.  The official
+    # image authenticates TCP with scram-sha-256, as production does.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          # Not a secret: this server lives for one job and is reachable
+          # only from the runner.
+          POSTGRES_PASSWORD: postgres
+        # Not 5432 on the host: the runner image ships a PostgreSQL of
+        # its own that may already hold it, and then the tests would
+        # quietly talk to the wrong server.
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      # The tests read testing/data and create.sh reads scripts/database
+      # from the source tree, at the same path the build job compiled in.
+      - uses: actions/checkout@v6
+
+      - name: Prepare test environment
+        uses: ./.github/actions/prepare-test-environment
+
+      - name: Download build directory
+        uses: ./.github/actions/download-build-directory
+
+      - name: Run unit tests
+        run: |
+          mv build/CMakeUserPresets.json ./
+          ./build/Release/unitTests
+
+      # The roles' passwords are made per run and masked; the schema is
+      # built by the same script a deployment uses.
+      - name: Create the test database
+        env:
+          PGHOST: localhost
+          PGPORT: '55432'
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          rw_password=$(openssl rand -hex 24)
+          ro_password=$(openssl rand -hex 24)
+          echo "::add-mask::${rw_password}"
+          echo "::add-mask::${ro_password}"
+          UEATDB_RW_USER=ueat_ci_rw UEATDB_RW_PASSWORD=${rw_password} \
+          UEATDB_RO_USER=ueat_ci_ro UEATDB_RO_PASSWORD=${ro_password} \
+            scripts/database/create.sh ueatdb_ci
+          echo "UEAT_TEST_DB_PASSWORD=${rw_password}" >> "${GITHUB_ENV}"
+
+      # Logs in, changes passwords, and steps up against a real schema.
+      # The backend role is what the authorities connect as; the
+      # superuser only seeds and removes the test users.
+      - name: Run integration tests
+        env:
+          UEAT_TEST_DB_HOST: localhost
+          UEAT_TEST_DB_PORT: '55432'
+          UEAT_TEST_DB_NAME: ueatdb_ci
+          UEAT_TEST_DB_USER: ueat_ci_rw
+          UEAT_TEST_DB_SUPERUSER: postgres
+          UEAT_TEST_DB_SUPERUSER_PASSWORD: postgres
+        run: ./build/Release/unitTests "[integration]"

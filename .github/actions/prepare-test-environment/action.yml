@@ -1,0 +1,16 @@
+name: prepare-environment
+description: Prepares the test environment
+runs:
+  using: "composite"
+  steps:
+    # The server is a postgres:18 service container declared by the job,
+    # so only the client is needed here: create.sh drives it with psql.
+    - name: Prepare environment
+      run: |
+        mkdir -p ${{github.workspace}}/build
+        sudo apt-get update -y
+        sudo apt-get install -y --no-install-recommends \
+            tar \
+            openssl \
+            postgresql-client
+      shell: bash

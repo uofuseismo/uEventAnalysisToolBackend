@@ -17,8 +17,6 @@
 #include "uEventAnalysisToolBackend/auth/administratorLoginAuthorityOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/authenticator.hpp"
 #include "uEventAnalysisToolBackend/auth/claims.hpp"
-//#include "uEventAnalysisToolBackend/auth/database.hpp"
-//#include "uEventAnalysisToolBackend/auth/databaseOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/hasher.hpp"
 //#include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
 //#include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"

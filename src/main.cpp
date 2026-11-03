@@ -25,9 +25,6 @@
 
 #include "uEventAnalysisToolBackend/auth/administratorLoginAuthority.hpp"
 #include "uEventAnalysisToolBackend/auth/administratorTokenVerifier.hpp"
-//#include "uEventAnalysisToolBackend/auth/database.hpp"
-//#include "uEventAnalysisToolBackend/auth/databaseOptions.hpp"
-//#include "uEventAnalysisToolBackend/auth/jsonWebToken.hpp"
 #include "uEventAnalysisToolBackend/auth/userLoginAuthority.hpp"
 #include "uEventAnalysisToolBackend/auth/userTokenVerifier.hpp"
 //#include "uEventAnalysisToolBackend/database/credentials.hpp"

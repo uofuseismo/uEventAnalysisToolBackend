@@ -14,7 +14,6 @@
 #include <boost/property_tree/ini_parser.hpp>
 #include "uEventAnalysisToolBackend/database/credentials.hpp"
 #include "uEventAnalysisToolBackend/auth/administratorLoginAuthorityOptions.hpp"
-//#include "uEventAnalysisToolBackend/auth/databaseOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/tokenVerifierOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/userLoginAuthorityOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
@@ -142,9 +141,11 @@ struct ProgramOptions
         passwordHasherOptions
             = UEAT::Auth::Password::HasherOptions::fromInitializationFile(
                  iniFile, "PasswordHasher");
+/*
         passwordPolicy
             = UEAT::Auth::Password::PasswordPolicy::fromInitializationFile(
                  iniFile, "PasswordPolicy");
+*/
     }
 //private:
     UEventAnalysisToolBackend::OTelOptions::HTTPMetrics otelHTTPMetricsOptions;
@@ -159,7 +160,7 @@ struct ProgramOptions
     UEventAnalysisToolBackend::Auth::UserLoginAuthorityOptions userLoginAuthorityOptions;
     //UEventAnalysisToolBackend::Database::Credentials userLoginAuthorityDatabaseCredentials;
     UEventAnalysisToolBackend::Auth::Password::HasherOptions passwordHasherOptions;
-    UEventAnalysisToolBackend::Auth::Password::PasswordPolicy passwordPolicy;
+    //UEventAnalysisToolBackend::Auth::Password::PasswordPolicy passwordPolicy;
     //UEventAnalysisToolBackend::Auth::DatabaseOptions authDatabaseOptions;
     UEventAnalysisToolBackend::GRPC::ServerOptions grpcServerOptions;
     MapServerOptions mapServerOptions;

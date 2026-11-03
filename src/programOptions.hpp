@@ -138,13 +138,10 @@ struct ProgramOptions
                  iniFile, "UserLoginAuthority",
                  applicationName + "-user-authority");
 
+/*
         passwordHasherOptions
             = UEAT::Auth::Password::HasherOptions::fromInitializationFile(
                  iniFile, "PasswordHasher");
-/*
-        passwordPolicy
-            = UEAT::Auth::Password::PasswordPolicy::fromInitializationFile(
-                 iniFile, "PasswordPolicy");
 */
     }
 //private:
@@ -159,7 +156,7 @@ struct ProgramOptions
     //UEventAnalysisToolBackend::Database::Credentials adminLoginAuthorityDatabaseCredentials;
     UEventAnalysisToolBackend::Auth::UserLoginAuthorityOptions userLoginAuthorityOptions;
     //UEventAnalysisToolBackend::Database::Credentials userLoginAuthorityDatabaseCredentials;
-    UEventAnalysisToolBackend::Auth::Password::HasherOptions passwordHasherOptions;
+    //UEventAnalysisToolBackend::Auth::Password::HasherOptions passwordHasherOptions;
     //UEventAnalysisToolBackend::Auth::Password::PasswordPolicy passwordPolicy;
     //UEventAnalysisToolBackend::Auth::DatabaseOptions authDatabaseOptions;
     UEventAnalysisToolBackend::GRPC::ServerOptions grpcServerOptions;

@@ -19,7 +19,6 @@
 #include "uEventAnalysisToolBackend/grpc/requireBearer.hpp"
 //#include "uEventAnalysisToolBackend/grpc/parseAuthorizationHeader.hpp"
 #include "uEventAnalysisToolBackend/grpc/toRequestIdentifier.hpp"
-//#include "uEventAnalysisToolBackend/grpc/validateClientAccessToken.hpp"
 #include <uEventAnalysisToolAPI/admin/v1/service.grpc.pb.h>
 #include <uEventAnalysisToolAPI/admin/v1/create_user_request.pb.h>
 #include <uEventAnalysisToolAPI/admin/v1/create_user_response.pb.h>

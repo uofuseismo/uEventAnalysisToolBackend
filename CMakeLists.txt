@@ -65,7 +65,7 @@ else()
    set(uEventAnalysisToolBackend_GITTAG "")
 endif()
 configure_file(${CMAKE_SOURCE_DIR}/lib/version.hpp.in
-               ${CMAKE_SOURCE_DIR}/include/uEventAnalysisToolBackend/version.hpp)
+               ${CMAKE_CURRENT_BINARY_DIR}/include/uEventAnalysisToolBackend/version.hpp)
 
 set(HEADER_FILES
     include/uEventAnalysisToolBackend/auth/administratorLoginAuthority.hpp
@@ -87,7 +87,6 @@ set(HEADER_FILES
     include/uEventAnalysisToolBackend/grpc/toRequestIdentifier.hpp
     include/uEventAnalysisToolBackend/services/adminService.hpp
     include/uEventAnalysisToolBackend/services/authService.hpp
-    include/uEventAnalysisToolBackend/version.hpp
     )
 set(WILL_BE_DELETED_HEADER_FILES
     include/uEventAnalysisToolBackend/database/aqms/aqms.hpp
@@ -207,9 +206,11 @@ target_sources(libuEventAnalysisToolBackend
                       HEADERS
                       BASE_DIRS
                          include
+                         ${CMAKE_CURRENT_BINARY_DIR}/include
                       FILES
                          ${HEADER_FILES}
                          ${WILL_BE_DELETED_HEADER_FILES}
+                         ${CMAKE_CURRENT_BINARY_DIR}/include/uEventAnalysisToolBackend/version.hpp
                )
 protobuf_generate(TARGET libuEventAnalysisToolBackend
                   LANGUAGE cpp

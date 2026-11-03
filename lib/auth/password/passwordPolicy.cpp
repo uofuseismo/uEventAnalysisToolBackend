@@ -1,6 +1,6 @@
 #include <algorithm>
 #include <cctype>
-#include <expected>
+#include <cstdint>
 #include <filesystem>
 #include <iterator>
 #include <memory>
@@ -13,6 +13,8 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ptree_fwd.hpp>
 #include <boost/property_tree/ini_parser.hpp>
+#include <sodium/core.h>
+#include <sodium/randombytes.h>
 #include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
 #include <uEventAnalysisToolAPI/auth/v1/password_requirements.pb.h>
 
@@ -145,7 +147,7 @@ bool PasswordPolicy::newAndOldPasswordMustDiffer() const noexcept
 }
 
 /// Creates a temporary password based on the current policy.
-std::string PasswordPolicy::createTemporaryPassword() const noexcept
+std::string PasswordPolicy::createTemporaryPassword() const
 {
     auto [candidateMinimumLength, candidateMaximumLength]
          = getMinimumAndMaximumLength();
@@ -165,17 +167,19 @@ std::string PasswordPolicy::createTemporaryPassword() const noexcept
         }
     }
     // Initialize our RNG
+    if (sodium_init() ==-1)
+    {
+        throw std::runtime_error("Failed to initialize sodium");
+    }
     std::random_device device;
     std::mt19937 generator(device());
     // First generate a list of random characters
-    std::uniform_int_distribution<>
-        alphabetDistribution(0, static_cast<int> (::ALPHABET.size()));
     std::string password;
     std::vector<int> isChangeableIndex(passwordLength);
     for (int i = 0; i < passwordLength; ++i)
     {
-        auto j = alphabetDistribution(generator);
-        password.push_back(::ALPHABET[j]);
+        password.push_back(::ALPHABET[randombytes_uniform(
+            static_cast<std::uint32_t> (::ALPHABET.size()))]);
         isChangeableIndex[i] = i;
     }
     // Designate one survivor
@@ -198,12 +202,11 @@ std::string PasswordPolicy::createTemporaryPassword() const noexcept
                                 std::back_inserter(samples),
                                 nChange,
                                 generator); 
-            std::uniform_int_distribution<>
-                numberDistribution(0, static_cast<int> (::NUMBERS.size()));
             for (auto s : samples)
             {
-                auto j = numberDistribution(generator);
-                password[s] = ::NUMBERS[j];
+                auto number = ::NUMBERS[randombytes_uniform(
+                   static_cast<std::uint32_t> (::NUMBERS.size()))];
+                password[s] = number;
             } 
             for (auto s : samples)
             {
@@ -222,12 +225,11 @@ std::string PasswordPolicy::createTemporaryPassword() const noexcept
                                 std::back_inserter(samples),
                                 nChange,
                                 generator); 
-            std::uniform_int_distribution<>
-                specialDistribution(0, static_cast<int> (::SPECIAL.size()));
             for (auto s : samples)
             {
-                auto j = specialDistribution(generator);
-                password[s] = ::SPECIAL[j];
+                auto specialChar = ::SPECIAL[randombytes_uniform(
+                   static_cast<std::uint32_t> (::SPECIAL.size()))];
+                password[s] = specialChar;
             }
             for (auto s : samples)
             {

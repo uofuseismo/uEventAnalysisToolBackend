@@ -72,7 +72,8 @@ public:
     [[nodiscard]] bool newAndOldPasswordMustDiffer() const noexcept; 
 
     /// @brief Utility to create a random password based on the current rules.
-    [[nodiscard]] std::string createTemporaryPassword() const noexcept;
+    /// @throws std::runtime_error if there is an issue initializing libsodium.
+    [[nodiscard]] std::string createTemporaryPassword() const;
 
     /// @brief Validates a proposed password.
     [[nodiscard]] ValidationResult validate(const std::pair<std::string, std::string> &newAndOldPassword) const noexcept;

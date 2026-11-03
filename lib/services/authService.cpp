@@ -13,7 +13,6 @@
 #include "uEventAnalysisToolBackend/services/authService.hpp"
 #include "uEventAnalysisToolBackend/auth/authenticator.hpp"
 #include "uEventAnalysisToolBackend/auth/userLoginAuthority.hpp"
-#include "uEventAnalysisToolBackend/auth/userTokenVerifier.hpp"
 #include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
 #include "uEventAnalysisToolBackend/grpc/parseAuthorizationHeader.hpp"
 #include "uEventAnalysisToolBackend/grpc/requireBearer.hpp"
@@ -38,11 +37,9 @@ public:
     AuthServiceImpl
     (
         std::shared_ptr<UAuth::UserLoginAuthority> loginAuthority,
-        std::shared_ptr<UAuth::UserTokenVerifier> tokenVerifier,
         std::shared_ptr<spdlog::logger> logger
     ) :
         mLoginAuthority(std::move(loginAuthority)),
-        mTokenVerifier(std::move(tokenVerifier)),
         mLogger(std::move(logger))
     {
         if (mLoginAuthority == nullptr)
@@ -53,14 +50,6 @@ public:
         {
             throw std::invalid_argument("Login authority not initialized");
         }   
-        if (mTokenVerifier == nullptr)
-        {
-            throw std::invalid_argument("User token verifier is null");
-        }
-        if (!mTokenVerifier->isInitialized())
-        {
-            throw std::invalid_argument("User token verifier not initialized");
-        }
         if (mLogger == nullptr)
         {
             // NOLINTBEGIN(misc-include-cleaner)
@@ -75,7 +64,6 @@ public:
     }
 //private:
     std::shared_ptr<UAuth::UserLoginAuthority> mLoginAuthority{nullptr};
-    std::shared_ptr<UAuth::UserTokenVerifier> mTokenVerifier{nullptr};
     std::shared_ptr<spdlog::logger> mLogger{nullptr};
 };
 
@@ -83,12 +71,10 @@ public:
 AuthService::AuthService
     (
         std::shared_ptr<UAuth::UserLoginAuthority> loginAuthority,
-        std::shared_ptr<UAuth::UserTokenVerifier> tokenVerifier,
         std::shared_ptr<spdlog::logger> logger
     ) :
     pImpl(std::make_unique<AuthServiceImpl>
           (std::move(loginAuthority),
-           std::move(tokenVerifier),
            std::move(logger)))//,
     //UEventAnalysisToolAPI::Auth::V1::AuthService::CallbackService {}
 {
@@ -159,6 +145,20 @@ grpc::ServerUnaryReactor
                     //metrics.incrementUnauthenticatedCounter(mRouteName);
                     Finish({grpc::StatusCode::UNAUTHENTICATED,
                            "Invalid credentials"});
+                    return;
+                }
+                if (loginResult.error() ==
+                    Auth::IAuthenticator::Result::PasswordChangeRequired)
+                {
+                    SPDLOG_LOGGER_WARN(mLogger,
+                        "Rejected {}; {} must change password",
+                        requestIdentifier,
+                        userNameAndPassword->first);
+                    //metrics.incrementClientErrorCounter(mRouteName);
+                    // System is not in correct state - do not retry this route
+                    // until first changing password thereby correcting state
+                    Finish({grpc::StatusCode::FAILED_PRECONDITION,
+                           "Password must be changed prior to logging in"});
                     return;
                 }
                 else if (loginResult.error() ==
@@ -418,7 +418,6 @@ grpc::ServerUnaryReactor
                 grpc::CallbackServerContext *context,
                 const UAuthV1::GetPasswordRequirementsRequest &request,
                 UAuth::Password::PasswordPolicy &policy,
-                const UAuth::UserTokenVerifier &tokenVerifier,
                 std::shared_ptr<spdlog::logger> logger) :
             mLogger(std::move(logger))
         {
@@ -474,7 +473,6 @@ grpc::ServerUnaryReactor
                        context,
                        *request,
                        policy,
-                       *pImpl->mTokenVerifier,
                        pImpl->mLogger);
 
 }

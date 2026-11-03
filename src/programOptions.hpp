@@ -14,7 +14,7 @@
 #include <boost/property_tree/ini_parser.hpp>
 #include "uEventAnalysisToolBackend/database/credentials.hpp"
 #include "uEventAnalysisToolBackend/auth/administratorLoginAuthorityOptions.hpp"
-#include "uEventAnalysisToolBackend/auth/databaseOptions.hpp"
+//#include "uEventAnalysisToolBackend/auth/databaseOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/tokenVerifierOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/userLoginAuthorityOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
@@ -160,7 +160,7 @@ struct ProgramOptions
     //UEventAnalysisToolBackend::Database::Credentials userLoginAuthorityDatabaseCredentials;
     UEventAnalysisToolBackend::Auth::Password::HasherOptions passwordHasherOptions;
     UEventAnalysisToolBackend::Auth::Password::PasswordPolicy passwordPolicy;
-    UEventAnalysisToolBackend::Auth::DatabaseOptions authDatabaseOptions;
+    //UEventAnalysisToolBackend::Auth::DatabaseOptions authDatabaseOptions;
     UEventAnalysisToolBackend::GRPC::ServerOptions grpcServerOptions;
     MapServerOptions mapServerOptions;
     std::string applicationName{APPLICATION_NAME};

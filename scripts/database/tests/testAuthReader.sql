@@ -49,6 +49,9 @@ BEGIN
     IF NOT auth.user_must_change_password('carol') THEN
         RAISE EXCEPTION 'FAIL: reader could not see carol is provisional';
     END IF;
+    IF auth.get_user_name('Carol') IS DISTINCT FROM 'carol' THEN
+        RAISE EXCEPTION 'FAIL: reader could not canonicalize a name';
+    END IF;
     IF NOT auth.user_is_admin('root') OR auth.count_active_admins() <> 1 THEN
         RAISE EXCEPTION 'FAIL: reader could not read admin state';
     END IF;

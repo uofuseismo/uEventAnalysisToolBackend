@@ -119,8 +119,8 @@ set(LIBRARY_SRC
     lib/auth/administratorTokenVerifier.cpp
     lib/auth/authenticator.cpp
     #lib/auth/authNZ.cpp
-    lib/auth/database.cpp
-    lib/auth/databaseOptions.cpp
+    #lib/auth/database.cpp
+    #lib/auth/databaseOptions.cpp
     #lib/auth/grpc.cpp
     #lib/auth/jsonWebToken.cpp
     #lib/auth/jsonWebTokenOptions.cpp
@@ -309,6 +309,7 @@ if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
                   #testing/auth/jsonWebToken.cpp
                   #testing/auth/authNZ.cpp
                   testing/auth/administratorLoginAuthority.cpp
+                  testing/auth/userLoginAuthority.cpp
                   #testing/auth/grpc.cpp
                   testing/auth/databaseReconnect.cpp
                   testing/auth/password/hasher.cpp

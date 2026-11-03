@@ -157,6 +157,15 @@ BEGIN
     IF auth.get_password_hash('Alice') IS DISTINCT FROM 'hash-alice' THEN
         RAISE EXCEPTION 'FAIL: wrong hash for alice';
     END IF;
+    --- Any spelling the lookups accept gives back the stored one.
+    IF auth.get_user_name(' ALICE ') IS DISTINCT FROM 'alice' THEN
+        RAISE EXCEPTION 'FAIL: get_user_name did not canonicalize ALICE';
+    END IF;
+    IF auth.get_user_name('nobody') IS NOT NULL OR
+       auth.get_user_name('') IS NOT NULL OR
+       auth.get_user_name(NULL) IS NOT NULL THEN
+        RAISE EXCEPTION 'FAIL: get_user_name named a user who does not exist';
+    END IF;
     --- Created directly, so already activated: nothing to change.
     IF auth.user_must_change_password('alice') THEN
         RAISE EXCEPTION 'FAIL: a directly created user must change password';

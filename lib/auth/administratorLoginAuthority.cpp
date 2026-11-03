@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <exception>
 #include <expected>
@@ -15,6 +16,7 @@
 #include "uEventAnalysisToolBackend/auth/administratorLoginAuthority.hpp"
 #include "uEventAnalysisToolBackend/auth/administratorLoginAuthorityOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/authenticator.hpp"
+#include "uEventAnalysisToolBackend/auth/claims.hpp"
 //#include "uEventAnalysisToolBackend/auth/database.hpp"
 //#include "uEventAnalysisToolBackend/auth/databaseOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/hasher.hpp"
@@ -79,15 +81,24 @@ public:
 
     /// @brief Creates the token; permissions, when present, ride in the
     ///        signed payload.
-    [[nodiscard]] std::string createToken(const std::string &user) const
+    [[nodiscard]] std::string createToken(
+        const Claims &userClaims) const
     {
-        const std::chrono::seconds expiration{mOptions.getTimeToLive()};
+        const auto &user = userClaims.getUser();
+        const auto now = std::chrono::system_clock::now();
+        auto expiresAt = now + std::chrono::seconds {mOptions.getTimeToLive()};
+        expiresAt = std::min(expiresAt, userClaims.getExpirationTime());
+        if (expiresAt <= now)
+        {
+            throw std::invalid_argument(
+               "Token for " + user + " has already expired");
+        }
         auto token = jwt::create<jwt::traits::boost_json> ();
         token.set_subject(user)
              .set_issuer(mOptions.getIssuer())
              .set_type("JWT")
-             .set_issued_now()
-             .set_expires_in(expiration);
+             .set_issued_at(now)
+             .set_expires_at(expiresAt);
         token.set_payload_claim("scope", "administrator");
         if (mOptions.getAlgorithm() ==
             AdministratorLoginAuthorityOptions::Algorithm::EdDSA25519)
@@ -180,12 +191,6 @@ public:
                                 user);
                     return IAuthenticator::Result::InvalidCredentials;
                 }
-                if (!recordLogin(user))
-                {
-                    SPDLOG_LOGGER_WARN(mLogger,
-                                       "Failed to record login for {}",
-                                       user); 
-                }
                 return IAuthenticator::Result::Authenticated;
             }
             else
@@ -234,7 +239,8 @@ bool AdministratorLoginAuthority::isInitialized() const noexcept
 /// Login with password and get a token
 std::expected<std::string, IAuthenticator::Result>
 AdministratorLoginAuthority::loginWithPassword(
-    const std::pair<std::string, std::string> &userNameAndPassword) const
+    const Claims &userClaims,
+    const std::string &password) const
 {
     if (!isInitialized())
     {
@@ -242,7 +248,7 @@ AdministratorLoginAuthority::loginWithPassword(
                             "AdministratorLoginAuthority not initialized");
         return std::unexpected(IAuthenticator::Result::ServerError);
     }
-    const auto &user = userNameAndPassword.first;
+    const auto &user = userClaims.getUser();
     if (user.empty())
     {
         SPDLOG_LOGGER_WARN(pImpl->mLogger,
@@ -253,13 +259,23 @@ AdministratorLoginAuthority::loginWithPassword(
     try
     {
         auto result
-            = pImpl->authenticateByUserNameAndPassword(userNameAndPassword);
+            = pImpl->authenticateByUserNameAndPassword(
+                std::pair {user, password});
         if (result == IAuthenticator::Result::Authenticated)
         {
             // Create the JWT
+            std::string token;
             try
             {
-                return pImpl->createToken(user); 
+                token = pImpl->createToken(userClaims); 
+            }
+            catch (const std::invalid_argument &e)
+            {
+                SPDLOG_LOGGER_WARN(pImpl->mLogger,
+                                   "Failed to create token for {} because {}",
+                                   user, e.what());
+                return std::unexpected(
+                    IAuthenticator::Result::InvalidCredentials);
             }
             catch (const std::exception &e)
             {
@@ -268,6 +284,23 @@ AdministratorLoginAuthority::loginWithPassword(
                                     user, e.what());
                 return std::unexpected(IAuthenticator::Result::ServerError);
             }
+            // Stamp the login
+            try
+            {
+                if (!pImpl->recordLogin(user))
+                {
+                    SPDLOG_LOGGER_WARN(pImpl->mLogger,
+                                   "Failed to record admin login for {}",
+                                   user);
+                }
+            }
+            catch (const std::exception &e)
+            {
+               SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+               "Failed to to record login for {} because {}; proceeding",
+               user, e.what());
+            }
+            return token;
         }
         return std::unexpected(result);
     }

@@ -17,7 +17,9 @@ public:
         Authenticated,      /*!< User was successfully authenticated.  This is like a 200 return code. */
         InvalidCredentials, /*!< User was rejeceted because of invalid credentials.  For example,
                                  if using Basic authentication the user name or password could be
-                                wrong or if using bearer then the token could be expired. */
+                                 wrong or if using bearer then the token could be expired. */
+        PasswordChangeRequired,  /*!< The user must first change their password prior to
+                                      logging in and proceeding. */
         ServerError         /*!< A backend service raised an error.  This is like a 500 return code. */
     };
 public:

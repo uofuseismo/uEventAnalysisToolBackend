@@ -127,7 +127,8 @@ grpc::ServerUnaryReactor
             mLogger(std::move(logger))
         {
             auto requestIdentifier = GRPC::toRequestIdentifier(*context);
-            auto bearerResult = GRPC::requireBearer(*context, userTokenVerifier);
+            auto bearerResult
+                = GRPC::requireBearer(*context, userTokenVerifier);
             if (!bearerResult.has_value())
             {
                 //metrics.incrementUnauthenticatedCounter(mRouteName);
@@ -146,7 +147,8 @@ grpc::ServerUnaryReactor
             try
             {
                 auto result
-                    = loginAuthority.loginWithPassword(std::pair {user, password});
+                    = loginAuthority.loginWithPassword(
+                        *bearerResult, password);
                 if (result)
                 {
                     SPDLOG_LOGGER_INFO(mLogger,

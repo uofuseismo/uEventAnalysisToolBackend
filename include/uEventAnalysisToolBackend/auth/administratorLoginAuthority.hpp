@@ -2,12 +2,14 @@
 #define UEVENT_ANALYSIS_TOOL_BACKEND_AUTH_ADMINISTRATOR_LOGIN_AUTHORITY_HPP
 #include <expected>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <spdlog/logger.h>
 #include <uEventAnalysisToolBackend/auth/authenticator.hpp>
 namespace UEventAnalysisToolBackend::Auth
 {
  class AdministratorLoginAuthorityOptions;
+ class Claims;
 }
 namespace UEventAnalysisToolBackend::Auth
 {
@@ -36,8 +38,9 @@ public:
     /// @result On success, this mints a new administrator token - i.e., this is
     ///         not a user claim.  
     [[nodiscard]] std::expected<std::string, IAuthenticator::Result>
-        loginWithPassword(const std::pair<std::string, std::string> &userNameAndPassword) const;
- 
+        loginWithPassword(const Claims &userClaims,
+                          const std::string &password) const;
+
     /// @brief Destructor
     ~AdministratorLoginAuthority();
 

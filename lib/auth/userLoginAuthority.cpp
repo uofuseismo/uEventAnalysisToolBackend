@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <exception>
 #include <expected>
@@ -73,15 +75,37 @@ public:
         mInitialized = true;
     }
 
+    /// @brief Gets the user name from the database.  This enforces
+    ///        consistency in casing.
+    [[nodiscard]] std::optional<std::string>
+        getUserName(const std::string &user)
+    {
+        constexpr std::string_view query{"SELECT auth.get_user_name($1)"};
+        const pqxx::params parameters{user};
+        return withTransaction<pqxx::read_transaction>(
+            [&](pqxx::read_transaction &transaction)
+             -> std::optional<std::string>
+            {
+                auto row = transaction.exec(query, parameters).one_row();
+                if (row.at(0).is_null()){return std::nullopt;}
+                return row[0].as<std::string> ();
+            });
+    }
+
     /// @brief Creates the token; permissions, when present, ride in the
     ///        signed payload.
     [[nodiscard]] std::string createToken(const std::string &user)
     {   
         auto isAdmin = isAdministrator(user);
         auto permissions = getPermissions(user);
+        auto name = getUserName(user);
+        if (name == std::nullopt)
+        {
+            throw std::runtime_error(user + " does not exist");
+        }
         const std::chrono::seconds expiration{mOptions.getTimeToLive()};
         auto token = jwt::create<jwt::traits::boost_json> (); 
-        token.set_subject(user)
+        token.set_subject(*name)
              .set_issuer(mOptions.getIssuer())
              .set_type("JWT")
              .set_issued_now()
@@ -217,6 +241,28 @@ public:
             });
     }
 
+    /// @brief Indicates the user must (first) change their password.
+    /// @result True means the user must first change their password before
+    ///         logging in.
+    [[nodiscard]] std::optional<bool> userMustChangePassword(const std::string &user)
+    {
+        if (user.empty())
+        {
+            throw std::runtime_error("User is empty");
+        }
+        constexpr std::string_view query{"SELECT auth.user_must_change_password($1)"};
+        const pqxx::params parameters{user};
+        return withTransaction<pqxx::read_transaction>(
+            [&](pqxx::read_transaction &transaction) -> std::optional<bool>
+            {
+                auto row = transaction.exec(query, parameters).one_row();
+                // Null indicates no user
+                if (row.at(0).is_null()){return std::nullopt;}
+                return row[0].as<bool> ();
+            });
+    }
+
+
     // Check the user's password
     [[nodiscard]] IAuthenticator::Result authenticateByUserNameAndPassword(
         const std::pair<std::string, std::string> &userAndPassword)
@@ -228,11 +274,55 @@ public:
         {
             if (Password::Hasher::verify(password, *hashedPassword))
             {
-                if (!recordLogin(user))
+                auto mustChangePassword = userMustChangePassword(user);
+                if (mustChangePassword.has_value() && *mustChangePassword)
                 {
                     SPDLOG_LOGGER_WARN(mLogger,
-                                       "Failed to record login for {}",
-                                       user); 
+                                       "Rejecting {} - password not yet changed",
+                                       user);
+                    return IAuthenticator::Result::PasswordChangeRequired;
+                }
+                // Rehash required?
+                try
+                {
+                    if (mPasswordHasher->needsRehash(*hashedPassword))
+                    {
+                        SPDLOG_LOGGER_INFO(mLogger,
+                                           "Rehashing password for {}", user);
+                        auto newPassword = mPasswordHasher->hash(password);
+                        if (!changePassword(std::pair{user, newPassword}))
+                        {
+                            // Should not happen but want this to be really
+                            // annoying for me instead of locking them out for
+                            // specifying the right credentials - hence no return
+                            // servererrorr
+                            SPDLOG_LOGGER_ERROR(mLogger,
+                               "Failed to change password for {}; proceeding",
+                               user);
+                        }
+                    }
+                }
+                catch (const std::exception &e)
+                {
+                    SPDLOG_LOGGER_ERROR(mLogger,
+                    "Failed to rehash password for {} because {}; proceeding",
+                    user, e.what());
+                } 
+
+                try
+                {
+                    if (!recordLogin(user))
+                    {
+                        SPDLOG_LOGGER_WARN(mLogger,
+                                           "Failed to record login for {}",
+                                           user); 
+                    }
+                }
+                catch (const std::exception &e)
+                {
+                    SPDLOG_LOGGER_ERROR(mLogger,
+                    "Failed to to record login for {} because {}; proceeding",
+                    user, e.what());
                 }
                 return IAuthenticator::Result::Authenticated;
             }
@@ -298,9 +388,14 @@ UserLoginAuthority::loginWithPassword(
                             "UserLoginAuthority not initialized");
         return std::unexpected(IAuthenticator::Result::ServerError);
     }   
-    const auto &user = userNameAndPassword.first;
+    auto user = userNameAndPassword.first;
+    std::ranges::transform(user, user.begin(),
+                       [](const unsigned char c)
+                       {
+                           return static_cast<char> (std::tolower(c));
+                       });
     if (user.empty())
-    {   
+    {
         SPDLOG_LOGGER_WARN(pImpl->mLogger,
                          "Rejecting user login attempt because user is empty");
         return std::unexpected(IAuthenticator::Result::InvalidCredentials);
@@ -309,7 +404,8 @@ UserLoginAuthority::loginWithPassword(
     try 
     {   
         auto result
-            = pImpl->authenticateByUserNameAndPassword(userNameAndPassword);
+            = pImpl->authenticateByUserNameAndPassword(
+                 std::pair{ user, userNameAndPassword.second} );
         if (result == IAuthenticator::Result::Authenticated)
         {
             // Create the JWT
@@ -385,23 +481,36 @@ UserLoginAuthority::changePassword(
     auto verifyPasswordResult = verifyPassword(userNameAndPassword);
     if (verifyPasswordResult.has_value())
     {
+        std::string hashedPassword;
         try
         {
-            auto hashedPassword = pImpl->mPasswordHasher->hash(newPassword);
-            if (hashedPassword.empty())
-            {
-                SPDLOG_LOGGER_ERROR(pImpl->mLogger,
-                                    "Resulting hashed password is empty");
-                return std::unexpected(ChangePasswordError::ServerError);
-            }
+            hashedPassword = pImpl->mPasswordHasher->hash(newPassword);
+        }
+        catch (const std::exception &e)
+        {
+            SPDLOG_LOGGER_ERROR(
+                pImpl->mLogger,
+                "Failed to hash password; skpping password update");
+            return std::unexpected(ChangePasswordError::ServerError);
+        }
+        if (hashedPassword.empty())
+        {
+            SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+                                "Resulting hashed password is empty");
+            return std::unexpected(ChangePasswordError::ServerError);
+        }
+        try
+        {
             auto wasSuccess = pImpl->changePassword(
                   std::pair {userNameAndPassword.first, hashedPassword}); 
             if (!wasSuccess)
             {
+                // Indicates provisional password expired between the
+                // verify and update.
                 SPDLOG_LOGGER_ERROR(pImpl->mLogger,
                                     "Failed to update password for {}",
                                     userNameAndPassword.first);
-                return std::unexpected(ChangePasswordError::ServerError);
+                return std::unexpected(ChangePasswordError::Unauthenticated);
             }
             else
             {
@@ -442,21 +551,35 @@ UserLoginAuthority::verifyPassword(
         return std::unexpected(IAuthenticator::Result::ServerError);
     }   
     auto user = userNameAndPassword.first;
-    auto password = userNameAndPassword.second;
-    auto hashedPassword = pImpl->getHashedPasswordFromDatabase(user);
-    if (hashedPassword != std::nullopt)
+    if (user.empty())
     {
-        if (Password::Hasher::verify(password, *hashedPassword))
-        {
-            return {};
-        }
-        SPDLOG_LOGGER_DEBUG(pImpl->mLogger, "{} passwords do not match", user);
+        SPDLOG_LOGGER_DEBUG(pImpl->mLogger, "Cannot verify an empty user name");
         return std::unexpected(IAuthenticator::Result::InvalidCredentials);
     }
-    else
-    {   
-        SPDLOG_LOGGER_WARN(pImpl->mLogger, "{} not in database", user);
-        return std::unexpected(IAuthenticator::Result::InvalidCredentials);
+    auto password = userNameAndPassword.second;
+    try
+    {
+        auto hashedPassword = pImpl->getHashedPasswordFromDatabase(user);
+        if (hashedPassword != std::nullopt)
+        {
+            if (Password::Hasher::verify(password, *hashedPassword))
+            {
+                return {};
+            }
+            SPDLOG_LOGGER_DEBUG(pImpl->mLogger, "{} passwords do not match",
+                                user);
+            return std::unexpected(IAuthenticator::Result::InvalidCredentials);
+        }
+        else
+        {   
+            SPDLOG_LOGGER_WARN(pImpl->mLogger, "{} not in database", user);
+            return std::unexpected(IAuthenticator::Result::InvalidCredentials);
+        }
+    }
+    catch (const std::exception &e)
+    {
+        SPDLOG_LOGGER_ERROR(pImpl->mLogger, "Hit exception {}", e.what());
+        return std::unexpected(IAuthenticator::Result::ServerError);           
     }   
     SPDLOG_LOGGER_ERROR(pImpl->mLogger, "Unhandled verify password workflow");
     return std::unexpected(IAuthenticator::Result::ServerError);

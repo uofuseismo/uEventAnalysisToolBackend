@@ -1,11 +1,7 @@
 #include <cctype>
 #include <chrono>
-#include <exception>
 #include <filesystem>
 #include <fstream>
-#include <iostream>
-#include <memory>
-#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -13,27 +9,25 @@
 #include <vector>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
-#include <pqxx/pqxx>
 #include "uEventAnalysisToolBackend/auth/administratorLoginAuthority.hpp"
 #include "uEventAnalysisToolBackend/auth/administratorLoginAuthorityOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/administratorTokenVerifier.hpp"
 #include "uEventAnalysisToolBackend/auth/authenticator.hpp"
 #include "uEventAnalysisToolBackend/auth/claims.hpp"
-#include "uEventAnalysisToolBackend/auth/userLoginAuthorityOptions.hpp"
-#include "uEventAnalysisToolBackend/auth/password/hasher.hpp"
-#include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/tokenVerifierOptions.hpp"
-#include "uEventAnalysisToolBackend/database/credentials.hpp"
 #include "integrationDatabase.hpp"
+#include "userSeeder.hpp"
 
 using namespace UEventAnalysisToolBackend::Auth;
 
-// Integration test: the administrator login against a real auth schema.
+// Integration test: the administrator step-up against a real auth schema.
 // The authority connects as the backend role (UEAT_TEST_DB_USER); the
-// users it logs in are seeded, and removed afterwards, through a superuser
-// connection (UEAT_TEST_DB_SUPERUSER) because auth.add_user is granted to
-// no role.  Every name carries a random suffix so the run touches only its
-// own rows.
+// users it elevates are seeded, and removed afterwards, through a
+// superuser connection (UEAT_TEST_DB_SUPERUSER).  Every name carries a
+// random suffix so the run touches only its own rows.
+//
+// The step-up takes the claims of an already-verified user token, so the
+// tests build those claims directly rather than minting a user token.
 
 namespace
 {
@@ -57,85 +51,17 @@ const std::string password{"green eggs and ham"};
     return contents.str();
 }
 
-/// @brief Seeds the users and removes them again, as a superuser.
-class Seeder
+/// @result The claims of a verified user token for this user.
+[[nodiscard]] Claims userClaims(
+    const std::string &user,
+    const std::chrono::system_clock::time_point expiresAt
+        = std::chrono::system_clock::now() + std::chrono::hours {1})
 {
-public:
-    explicit Seeder(const UEventAnalysisToolBackend::Database::Credentials &credentials) :
-        mConnection(std::make_unique<pqxx::connection>
-                    (credentials.getConnectionString()))
-    {
-        // The cheapest hash libsodium allows; verify reads the cost from
-        // the hash itself, so the authority needs no matching options.
-        Password::HasherOptions options;
-        options.setMemoryLimitInBytes(8192);
-        mHash = Password::Hasher{options}.hash(password);
-    }
-    void addUser(const std::string &name, const bool isAdministrator)
-    {
-        pqxx::work transaction{*mConnection};
-        const auto added
-            = transaction.exec("SELECT auth.add_user($1, $2, $3)",
-                               pqxx::params {name, mHash, isAdministrator})
-                         .one_row()[0].as<bool> ();
-        transaction.commit();
-        if (!added){throw std::runtime_error("Could not add " + name);}
-        mNames.push_back(name);
-    }
-    /// @brief An administrator still holding an issued password.  There is
-    ///        no ungated function for this, so set the column directly.
-    void addProvisionalAdministrator(const std::string &name)
-    {
-        pqxx::work transaction{*mConnection};
-        const auto added
-            = transaction.exec(
-                  "SELECT auth.add_provisional_user($1, $2, INTERVAL '1 hour')",
-                  pqxx::params {name, mHash}).one_row()[0].as<bool> ();
-        transaction.exec("UPDATE auth.users SET is_admin = TRUE "
-                         " WHERE name = $1",
-                         pqxx::params {name});
-        transaction.commit();
-        if (!added){throw std::runtime_error("Could not add " + name);}
-        mNames.push_back(name);
-    }
-    /// @result True if the user's last_login has been set.
-    [[nodiscard]] bool hasLoggedIn(const std::string &name)
-    {
-        pqxx::nontransaction transaction{*mConnection};
-        return !transaction.exec("SELECT last_login FROM auth.users "
-                                 " WHERE name = $1",
-                                 pqxx::params {name}).one_row()[0].is_null();
-    }
-    ~Seeder()
-    {
-        for (const auto &name : mNames)
-        {
-            try
-            {
-                pqxx::work transaction{*mConnection};
-                transaction.exec("SELECT auth.remove_user($1)",
-                                 pqxx::params {name});
-                transaction.commit();
-            }
-            catch (const std::exception &e)
-            {
-                // Can't fail the test from a destructor; say so instead.
-                // The suffix keeps a leftover row from colliding with the
-                // next run.
-                std::cerr << "Could not remove test user " << name
-                          << ": " << e.what() << '\n';
-            }
-        }
-    }
-    Seeder(const Seeder &) = delete;
-    Seeder(Seeder &&) = delete;
-    Seeder& operator=(const Seeder &) = delete;
-    Seeder& operator=(Seeder &&) = delete;
-private:
-    std::unique_ptr<pqxx::connection> mConnection;
-    std::vector<std::string> mNames;
-    std::string mHash;
-};
+    return Claims{user,
+                  Claims::Scope::User,
+                  std::vector<std::pair<std::string, std::string>> {},
+                  expiresAt};
+}
 
 }
 
@@ -160,19 +86,20 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::AdministratorLoginAuthority",
     const std::string provisional{"sam-i-am-provisional-" + suffix};
     INFO("suffix = " << suffix);
 
-    Seeder seeder{*superuserCredentials};
+    IntegrationDatabase::UserSeeder seeder{*superuserCredentials, password};
     seeder.addUser(administrator, true);
     seeder.addUser(user, false);
-    seeder.addProvisionalAdministrator(provisional);
+    seeder.addProvisionalUser(provisional, true);
 
     const auto publicKey = loadKey("ed25519-admin-public-key.pem");
+    const std::chrono::minutes timeToLive{10};
     AdministratorLoginAuthorityOptions options;
     options.setDatabaseCredentials(*backendCredentials);
     options.setKeyPairAndAlgorithm(
         std::pair {publicKey, loadKey("ed25519-admin-private-key.pem")},
         AdministratorLoginAuthorityOptions::Algorithm::EdDSA25519);
     options.setIssuer(issuer);
-    options.setTimeToLive(std::chrono::minutes {10});
+    options.setTimeToLive(timeToLive);
     const AdministratorLoginAuthority authority{
         options,
         IntegrationDatabase::quietLogger("administratorLoginAuthorityTests")};
@@ -189,7 +116,7 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::AdministratorLoginAuthority",
     SECTION("An administrator with the right password gets a token")
     {
         const auto token
-            = authority.loginWithPassword(std::pair {administrator, password});
+            = authority.loginWithPassword(userClaims(administrator), password);
         REQUIRE(token.has_value());
         const auto [result, claims] = verifier.verify(*token);
         REQUIRE(result == Result::Authenticated);
@@ -198,21 +125,73 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::AdministratorLoginAuthority",
         {
             REQUIRE(claims->getUser() == administrator);
             REQUIRE(Claims::isAdministrator(*claims));
+            // A step-up token grants administration, not data access.
+            REQUIRE(claims->begin() == claims->end());
         }
         REQUIRE(seeder.hasLoggedIn(administrator));
+    }
+    SECTION("The admin token lives no longer than its time to live")
+    {
+        const auto before = std::chrono::system_clock::now();
+        const auto token
+            = authority.loginWithPassword(userClaims(administrator), password);
+        REQUIRE(token.has_value());
+        const auto [result, claims] = verifier.verify(*token);
+        REQUIRE(claims.has_value());
+        if (claims)
+        {
+            // exp is whole seconds, so allow one either side.
+            const auto expiresAt = claims->getExpirationTime();
+            REQUIRE(expiresAt >= before + timeToLive - std::chrono::seconds {1});
+            REQUIRE(expiresAt <= std::chrono::system_clock::now()
+                               + timeToLive + std::chrono::seconds {1});
+        }
+    }
+    SECTION("The admin token cannot outlive the user token it came from")
+    {
+        // The user token expires well inside the admin time to live.
+        const auto userExpiresAt
+            = std::chrono::system_clock::now() + std::chrono::minutes {2};
+        const auto token
+            = authority.loginWithPassword(
+                  userClaims(administrator, userExpiresAt), password);
+        REQUIRE(token.has_value());
+        const auto [result, claims] = verifier.verify(*token);
+        REQUIRE(result == Result::Authenticated);
+        REQUIRE(claims.has_value());
+        if (claims)
+        {
+            REQUIRE(claims->getExpirationTime() <= userExpiresAt);
+            REQUIRE(claims->getExpirationTime()
+                 >= userExpiresAt - std::chrono::seconds {1});
+        }
+    }
+    SECTION("An expired user token cannot be elevated")
+    {
+        // requireBearer would have refused this; the authority must too,
+        // or it would mint a token that is dead on arrival.
+        const auto token
+            = authority.loginWithPassword(
+                  userClaims(administrator,
+                             std::chrono::system_clock::now()
+                           - std::chrono::seconds {1}),
+                  password);
+        REQUIRE_FALSE(token.has_value());
+        REQUIRE(token.error() == Result::InvalidCredentials);
+        REQUIRE_FALSE(seeder.hasLoggedIn(administrator));
     }
     SECTION("The user name is matched case-insensitively, as in the SQL")
     {
         auto shouted = administrator;
         for (auto &c : shouted){c = static_cast<char> (std::toupper(c));}
-        REQUIRE(authority.loginWithPassword(std::pair {shouted, password})
+        REQUIRE(authority.loginWithPassword(userClaims(shouted), password)
                     .has_value());
     }
     SECTION("An administrator with the wrong password is refused")
     {
         const auto token
-            = authority.loginWithPassword(
-                 std::pair {administrator, std::string {"green eggs"}});
+            = authority.loginWithPassword(userClaims(administrator),
+                                          "green eggs");
         REQUIRE_FALSE(token.has_value());
         REQUIRE(token.error() == Result::InvalidCredentials);
         REQUIRE_FALSE(seeder.hasLoggedIn(administrator));
@@ -220,7 +199,7 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::AdministratorLoginAuthority",
     SECTION("A non-administrator with the right password is refused")
     {
         const auto token
-            = authority.loginWithPassword(std::pair {user, password});
+            = authority.loginWithPassword(userClaims(user), password);
         REQUIRE_FALSE(token.has_value());
         // The same answer as a wrong password: the caller learns nothing
         // about who the administrators are.
@@ -232,7 +211,7 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::AdministratorLoginAuthority",
     {
         // Holding an issued password proves only that it was received.
         const auto token
-            = authority.loginWithPassword(std::pair {provisional, password});
+            = authority.loginWithPassword(userClaims(provisional), password);
         REQUIRE_FALSE(token.has_value());
         REQUIRE(token.error() == Result::InvalidCredentials);
     }
@@ -240,14 +219,15 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::AdministratorLoginAuthority",
     {
         const auto token
             = authority.loginWithPassword(
-                 std::pair {"no-such-user-" + suffix, password});
+                 userClaims("no-such-user-" + suffix), password);
         REQUIRE_FALSE(token.has_value());
         REQUIRE(token.error() == Result::InvalidCredentials);
     }
     SECTION("An empty user name is refused")
     {
         const auto token
-            = authority.loginWithPassword(std::pair {std::string {}, password});
+            = authority.loginWithPassword(userClaims(std::string {}),
+                                          password);
         REQUIRE_FALSE(token.has_value());
         REQUIRE(token.error() == Result::InvalidCredentials);
     }

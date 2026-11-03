@@ -126,6 +126,18 @@ RETURNS BOOLEAN AS $$
      WHERE name = lower(trim(p_name));
 $$ LANGUAGE sql;
 
+--- The name as stored, given any spelling the lookups accept - e.g.,
+--- ' JSmith ' gives 'jsmith'.  NULL if there is no such user.  Every
+--- function here matches lower(trim(name)), so a login typed in capitals
+--- succeeds; the backend puts THIS in the token, or the same person is
+--- a different user to everything downstream of it.
+CREATE OR REPLACE FUNCTION auth.get_user_name(p_name TEXT)
+RETURNS TEXT AS $$
+    SELECT name
+      FROM auth.users
+     WHERE name = lower(trim(p_name));
+$$ LANGUAGE sql;
+
 --- Deletes every never-activated account whose issued password has
 --- expired, and returns how many went.  Keys and permissions cascade.
 ---

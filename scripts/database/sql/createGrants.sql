@@ -90,6 +90,7 @@ GRANT EXECUTE ON FUNCTION
 GRANT EXECUTE ON FUNCTION
     auth.get_password_hash(TEXT),
     auth.user_must_change_password(TEXT),
+    auth.get_user_name(TEXT),
     auth.get_user_by_key(TEXT),
     auth.get_user_permission(TEXT, TEXT),
     auth.list_user_schemas(TEXT),

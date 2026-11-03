@@ -108,16 +108,9 @@ set(LIBRARY_SRC
     lib/auth/administratorLoginAuthorityOptions.cpp
     lib/auth/administratorTokenVerifier.cpp
     lib/auth/authenticator.cpp
-    #lib/auth/authNZ.cpp
-    #lib/auth/database.cpp
-    #lib/auth/databaseOptions.cpp
-    #lib/auth/grpc.cpp
-    #lib/auth/loginAuthority.cpp
-    #lib/auth/loginAuthorityOptions.cpp
     lib/auth/userLoginAuthority.cpp
     lib/auth/userLoginAuthorityOptions.cpp
     lib/auth/userTokenVerifier.cpp
-    #lib/auth/tokenVerifier.cpp
     lib/auth/tokenVerifierOptions.cpp
     lib/auth/password/hasher.cpp
     lib/auth/password/hasherOptions.cpp
@@ -294,10 +287,8 @@ endif()
 ##########################################################################################
 if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
    add_executable(unitTests
-                  #testing/auth/authNZ.cpp
                   testing/auth/administratorLoginAuthority.cpp
                   testing/auth/userLoginAuthority.cpp
-                  #testing/auth/grpc.cpp
                   testing/auth/databaseReconnect.cpp
                   testing/auth/password/hasher.cpp
                   testing/auth/password/hasherOptions.cpp

@@ -19,7 +19,7 @@ namespace UEventAnalysisToolBackend::Auth
 }
 namespace UEventAnalysisToolBackend::Auth
 {
-/// @class UserLoginAuthorityOptions loginAuthorityOptions.hpp
+/// @class UserLoginAuthorityOptions userLoginAuthorityOptions.hpp
 /// @brief Options defining the user login authority.
 /// @copyright Ben Baker (University of Utah) distributed under the
 ///            MIT NO AI license.

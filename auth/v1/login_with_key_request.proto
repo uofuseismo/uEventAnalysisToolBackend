@@ -8,11 +8,10 @@ package UEventAnalysisToolAPI.Auth.V1;
 message LoginWithKeyRequest {
    // The user's PUBLIC key.  This should be length 32U. 
    bytes public_key = 1;
-   // A fresh signature made with the public key.
-   bytes signature = 2;
-   // The user name with the user's public key and correspoding private key.
-   bytes signed_user = 3;    
+   // A compact JSON Web Signature signed by the client using the
+   // EdDSA algorithm.
+   string assertion = 2;
    // The frontend version.
-   string version = 4;
+   string version = 3;
 }
 

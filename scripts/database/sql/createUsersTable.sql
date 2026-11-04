@@ -360,3 +360,76 @@ RETURNS TABLE(key_name TEXT, algorithm TEXT, created TIMESTAMPTZ,
      WHERE u.name = lower(trim(p_name))
      ORDER BY k.created;
 $$ LANGUAGE sql;
+
+--------------------------------------------------------------------------
+---                     Single-use login assertions                     ---
+--------------------------------------------------------------------------
+--- A key login presents a short-lived assertion the client signed.  A
+--- valid signature proves the client holds the private key, but not
+--- that it signed THIS request: anyone who captured an assertion could
+--- present it again until it expires.  Each assertion carries a random
+--- jti, and this table remembers every jti until its assertion expires,
+--- so each one logs in once.
+---
+--- Scoped per key, so one client's jti cannot collide with another's.
+--- Rows go once their assertion has expired: an expired assertion is
+--- refused anyway, so forgetting its jti reopens nothing.
+DROP TABLE IF EXISTS auth.consumed_assertions CASCADE;
+CREATE TABLE auth.consumed_assertions(
+    key_id BIGINT NOT NULL
+        REFERENCES auth.user_keys(key_id) ON DELETE CASCADE,
+    jti TEXT NOT NULL CHECK (length(jti) BETWEEN 1 AND 128),
+    expires TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (key_id, jti)
+);
+CREATE INDEX consumed_assertions_expires_idx
+    ON auth.consumed_assertions(expires);
+
+--- Burns an assertion's jti.  Returns TRUE the first time a (key, jti)
+--- is presented, FALSE on a replay, and FALSE if the key is not active
+--- or the inputs are bad.  The backend calls this after verifying the
+--- signature and claims, and mints a token only on TRUE.
+---
+--- The expiry is checked here against the database's clock as well as
+--- in the backend.  That is what makes deleting old rows safe: a jti is
+--- forgotten only after its assertion can no longer be consumed, whatever
+--- the backend's clock says.
+---
+--- The upper bound keeps a client from parking rows for years with a
+--- far-future exp.  The backend allows 60 seconds; five minutes leaves
+--- room for clock skew between the two.
+---
+--- Two concurrent calls with the same jti cannot both win: the second
+--- INSERT waits on the first's primary key and then does nothing.
+CREATE OR REPLACE FUNCTION auth.consume_assertion(
+    p_public_key TEXT, p_jti TEXT, p_expires TIMESTAMPTZ)
+RETURNS BOOLEAN AS $$
+DECLARE v_key_id BIGINT;
+        n_inserted INTEGER;
+BEGIN
+    IF p_public_key IS NULL OR p_jti IS NULL OR p_expires IS NULL THEN
+        RETURN FALSE;
+    END IF;
+    IF length(p_jti) = 0 OR length(p_jti) > 128 THEN
+        RETURN FALSE;
+    END IF;
+    IF p_expires <= NOW() OR p_expires > NOW() + INTERVAL '5 minutes' THEN
+        RETURN FALSE;
+    END IF;
+    SELECT key_id INTO v_key_id
+      FROM auth.user_keys
+     WHERE public_key = trim(p_public_key)
+       AND revoked IS NULL
+       AND (expires IS NULL OR expires > NOW());
+    IF v_key_id IS NULL THEN
+        RETURN FALSE;
+    END IF;
+    --- Housekeeping on the way through; the index keeps it cheap.
+    DELETE FROM auth.consumed_assertions WHERE expires <= NOW();
+    INSERT INTO auth.consumed_assertions (key_id, jti, expires)
+        VALUES (v_key_id, p_jti, p_expires)
+        ON CONFLICT DO NOTHING;
+    GET DIAGNOSTICS n_inserted = ROW_COUNT;
+    RETURN n_inserted > 0;
+END;
+$$ LANGUAGE plpgsql;

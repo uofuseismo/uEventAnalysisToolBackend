@@ -47,6 +47,14 @@ END $$;
 
 DO $$
 BEGIN
+    PERFORM 1 FROM auth.consumed_assertions;
+    RAISE EXCEPTION 'FAIL: writer could SELECT from auth.consumed_assertions';
+EXCEPTION WHEN insufficient_privilege THEN
+    RAISE NOTICE 'ok: writer denied auth.consumed_assertions';
+END $$;
+
+DO $$
+BEGIN
     PERFORM 1 FROM auth.user_schema_permissions;
     RAISE EXCEPTION 'FAIL: writer could SELECT from auth.user_schema_permissions';
 EXCEPTION WHEN insufficient_privilege THEN
@@ -672,6 +680,107 @@ BEGIN
         RAISE EXCEPTION 'FAIL: removed gone twice';
     END IF;
     RAISE NOTICE 'ok: removal cascades';
+END $$;
+
+--------------------------------------------------------------------------
+---                     Single-use login assertions                     ---
+--------------------------------------------------------------------------
+--- dave and alice hold active keys; carol's were revoked by the
+--- compromised reset above.
+
+DO $$
+BEGIN
+    IF NOT auth.consume_assertion('pk-dave-laptop', 'jti-1',
+                                  NOW() + INTERVAL '30 seconds') THEN
+        RAISE EXCEPTION 'FAIL: a fresh assertion was refused';
+    END IF;
+    IF auth.consume_assertion('pk-dave-laptop', 'jti-1',
+                              NOW() + INTERVAL '30 seconds') THEN
+        RAISE EXCEPTION 'FAIL: a replayed assertion was accepted';
+    END IF;
+    --- The exp is not part of the identity: a replay with a new exp is
+    --- still a replay.
+    IF auth.consume_assertion('pk-dave-laptop', 'jti-1',
+                              NOW() + INTERVAL '45 seconds') THEN
+        RAISE EXCEPTION 'FAIL: a replay with a different exp was accepted';
+    END IF;
+    IF NOT auth.consume_assertion('pk-dave-laptop', 'jti-2',
+                                  NOW() + INTERVAL '30 seconds') THEN
+        RAISE EXCEPTION 'FAIL: a second assertion from dave was refused';
+    END IF;
+    --- Scoped per key: alice reusing dave's jti is not a replay.
+    IF NOT auth.consume_assertion('pk-alice-laptop', 'jti-1',
+                                  NOW() + INTERVAL '30 seconds') THEN
+        RAISE EXCEPTION 'FAIL: one key''s jti blocked another key';
+    END IF;
+    RAISE NOTICE 'ok: each assertion logs in once';
+END $$;
+
+DO $$
+BEGIN
+    IF auth.consume_assertion('pk-nobody', 'jti-x',
+                              NOW() + INTERVAL '30 seconds') THEN
+        RAISE EXCEPTION 'FAIL: consumed an assertion for an unknown key';
+    END IF;
+    IF auth.consume_assertion('pk-carol-laptop', 'jti-x',
+                              NOW() + INTERVAL '30 seconds') THEN
+        RAISE EXCEPTION 'FAIL: consumed an assertion for a revoked key';
+    END IF;
+    RAISE NOTICE 'ok: only active keys consume assertions';
+END $$;
+
+DO $$
+BEGIN
+    IF auth.consume_assertion('pk-dave-laptop', 'jti-old',
+                              NOW() - INTERVAL '1 second') THEN
+        RAISE EXCEPTION 'FAIL: consumed an expired assertion';
+    END IF;
+    IF auth.consume_assertion('pk-dave-laptop', 'jti-now', NOW()) THEN
+        RAISE EXCEPTION 'FAIL: consumed an assertion expiring now';
+    END IF;
+    IF auth.consume_assertion('pk-dave-laptop', 'jti-far',
+                              NOW() + INTERVAL '6 minutes') THEN
+        RAISE EXCEPTION 'FAIL: consumed an assertion with a far-future exp';
+    END IF;
+    IF auth.consume_assertion('pk-dave-laptop', '',
+                              NOW() + INTERVAL '30 seconds')
+       OR auth.consume_assertion('pk-dave-laptop', NULL,
+                                 NOW() + INTERVAL '30 seconds')
+       OR auth.consume_assertion('pk-dave-laptop', repeat('j', 129),
+                                 NOW() + INTERVAL '30 seconds')
+       OR auth.consume_assertion(NULL, 'jti-x',
+                                 NOW() + INTERVAL '30 seconds')
+       OR auth.consume_assertion('pk-dave-laptop', 'jti-x', NULL) THEN
+        RAISE EXCEPTION 'FAIL: consumed an assertion with bad inputs';
+    END IF;
+    IF NOT auth.consume_assertion('pk-dave-laptop', repeat('j', 128),
+                                  NOW() + INTERVAL '30 seconds') THEN
+        RAISE EXCEPTION 'FAIL: refused a 128-character jti';
+    END IF;
+    RAISE NOTICE 'ok: consume_assertion rejects bad inputs';
+END $$;
+
+--- Expiry, in separate statements because NOW() is frozen per
+--- transaction.  Once an assertion has expired its jti may be
+--- forgotten, which is safe only because the expired assertion itself
+--- can no longer be consumed.
+SELECT auth.consume_assertion('pk-dave-laptop', 'jti-short',
+                              NOW() + INTERVAL '1 second');
+SELECT pg_sleep(1.5);
+
+DO $$
+BEGIN
+    --- Triggers the cleanup of jti-short's row...
+    IF NOT auth.consume_assertion('pk-dave-laptop', 'jti-3',
+                                  NOW() + INTERVAL '30 seconds') THEN
+        RAISE EXCEPTION 'FAIL: a fresh assertion was refused after expiry';
+    END IF;
+    --- ...and replaying the expired assertion with its own exp still fails.
+    IF auth.consume_assertion('pk-dave-laptop', 'jti-short',
+                              NOW() - INTERVAL '0.5 seconds') THEN
+        RAISE EXCEPTION 'FAIL: an expired assertion was replayed';
+    END IF;
+    RAISE NOTICE 'ok: forgetting expired jtis reopens nothing';
 END $$;
 
 --------------------------------------------------------------------------

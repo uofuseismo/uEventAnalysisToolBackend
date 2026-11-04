@@ -18,6 +18,7 @@
 #include <spdlog/logger.h>
 #include <spdlog/sinks/stdout_color_sinks.h> //NOLINT
 #include <grpcpp/impl/service_type.h>
+#include <sodium/core.h>
 #include "uEventAnalysisToolBackend/version.hpp"
 #include "programOptions.hpp"
 #include "parseCommandLineOptions.hpp"
@@ -322,6 +323,12 @@ int main(int argc, char *argv[])
     SPDLOG_LOGGER_INFO(consoleLogger,
                        "Running version {} of uEventAnalysisToolBackend",
                        UEAT::Version::getVersionWithTag());
+    // Ensure sodium is ready to go
+    if (sodium_init() ==-1)
+    {
+        SPDLOG_LOGGER_CRITICAL(consoleLogger, "Failed to initialize sodium");
+        return EXIT_FAILURE;
+    } 
     // Initialize the metrics singleton once and for all
 
     // Parse the command line arguments

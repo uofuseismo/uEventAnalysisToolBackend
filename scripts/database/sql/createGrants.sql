@@ -70,6 +70,7 @@ GRANT EXECUTE ON FUNCTION
     auth.add_user_key(TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ),
     auth.revoke_user_key(TEXT, TEXT),
     auth.record_key_use(TEXT),
+    auth.consume_assertion(TEXT, TEXT, TIMESTAMPTZ),
     auth.delete_expired_provisional_users()
     TO :"rw_role";
 

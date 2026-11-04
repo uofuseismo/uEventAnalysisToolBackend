@@ -1,6 +1,8 @@
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <chrono>
+#include <cstdlib>
 #include <exception>
 #include <expected>
 #include <memory>
@@ -15,6 +17,7 @@
 #include <spdlog/sinks/stdout_color_sinks.h> //NOLINT
 #include <boost/json/object.hpp>
 #include <sodium/crypto_sign.h>
+#include <sodium/utils.h>
 #include <jwt-cpp/jwt.h>
 #include <jwt-cpp/traits/boost-json/traits.h>
 #include "uEventAnalysisToolBackend/auth/userLoginAuthority.hpp"
@@ -26,6 +29,151 @@
 #include "databaseUtilities.hpp"
 
 using namespace UEventAnalysisToolBackend::Auth;
+
+namespace
+{
+
+/// Bounds the work done on client input before anything is verified.
+constexpr size_t MAX_ASSERTION_BYTES{4096};
+/// An assertion is good for at most this long after it was signed.
+constexpr std::chrono::seconds MAX_ASSERTION_LIFETIME{60};
+/// Tolerated client clock drift for iat.
+constexpr std::chrono::seconds CLOCK_SKEW{10};
+/// The jti goes into the database, so cap it.
+constexpr size_t MAX_JTI_BYTES{128};
+
+/// What the rest of the login needs from a verified assertion.
+struct Assertion
+{
+    std::string subject;   // lower-cased
+    std::string jti;
+    std::chrono::system_clock::time_point expiresAt;
+};
+
+/// Check the assertion is signed by this public.
+/// @param[in] publicKey  The raw 32-byte Ed25519 public key.
+/// @param[in] assertion  The compact JWS: header.payload.signature.
+[[nodiscard]] bool verifyAssertionSignature(
+    const std::vector<unsigned char> &publicKey,
+    std::string_view assertion)
+{
+    if (publicKey.size() != crypto_sign_PUBLICKEYBYTES){return false;}
+    if (assertion.empty() || assertion.size() > MAX_ASSERTION_BYTES)
+    {
+        return false;
+    }
+    // header.payload.signature - exactly two dots, nothing empty.
+    const auto firstDot = assertion.find('.');
+    const auto lastDot = assertion.rfind('.');
+    if (firstDot == std::string_view::npos ||
+        firstDot == 0 ||
+        firstDot == lastDot ||
+        lastDot == assertion.size() - 1)
+    {
+        return false;
+    }
+    // What EdDSA JWS signs (RFC 8037): the ASCII of "header.payload".
+    const auto signingInput = assertion.substr(0, lastDot);
+    const auto encodedSignature = assertion.substr(lastDot + 1);
+
+
+    std::array<unsigned char, crypto_sign_BYTES> signature{};
+    size_t signatureLength{0};
+    // Fails if the text isn't base64url or decodes to more than 64 bytes.
+    if (sodium_base642bin(signature.data(), signature.size(),
+                          encodedSignature.data(), encodedSignature.size(),
+                          nullptr, &signatureLength, nullptr,
+                          sodium_base64_VARIANT_URLSAFE_NO_PADDING) != 0)
+    {
+        return false;
+    }
+    if (signatureLength != crypto_sign_BYTES){return false;}
+
+    // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
+    return crypto_sign_verify_detached(
+               signature.data(),
+               reinterpret_cast<const unsigned char *> (signingInput.data()),
+               signingInput.size(),
+               publicKey.data()) == 0;
+    // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
+}
+
+/// Does the (already signature-verified) assertion say the right
+/// things?  Nothing here is trusted until \c verifyAssertionSignature()
+/// returns true.
+/// @param[in] assertion  The compact JWS.
+/// @param[in] audience   This server's issuer string; the assertion must
+///                       name it, so one minted for another service
+///                       can't be replayed here.
+/// @param[in] now        The current time.
+/// @result The claims the login needs, or nothing if any check fails.
+[[nodiscard]] std::optional<Assertion>
+    parseAssertion(const std::string &assertion,
+                   const std::chrono::system_clock::time_point now,
+                   const std::string &audience)
+{
+    try
+    {
+        const auto decoded
+            = jwt::decode<jwt::traits::boost_json> (assertion);
+        // Never let the header pick the algorithm - step 1 already used
+        // Ed25519.  This only rejects a client that claims otherwise.
+        if (decoded.get_algorithm() != "EdDSA"){return std::nullopt;}
+        if (!decoded.has_subject() ||
+            !decoded.has_audience() ||
+            !decoded.has_issued_at() ||
+            !decoded.has_expires_at() ||
+            !decoded.has_id())
+        {
+            return std::nullopt;
+        }
+
+        if (!decoded.get_audience().contains(audience)){return std::nullopt;}
+
+        const auto issuedAt = decoded.get_issued_at();
+        const auto expiresAt = decoded.get_expires_at();
+        // Expired
+        if (expiresAt <= now){return std::nullopt;}
+        // Future
+        if (issuedAt > now + CLOCK_SKEW){return std::nullopt;}
+        // Too long
+        if (expiresAt - issuedAt > MAX_ASSERTION_LIFETIME){return std::nullopt;}
+
+        auto jti = decoded.get_id();
+        if (jti.empty() || jti.size() > MAX_JTI_BYTES){return std::nullopt;}
+
+        auto subject = decoded.get_subject();
+        if (subject.empty()){return std::nullopt;}
+        std::ranges::transform(subject, subject.begin(),
+                               [](unsigned char c)
+                               {
+                                   return static_cast<char> (std::tolower(c));
+                               });
+
+        return Assertion{std::move(subject), std::move(jti), expiresAt};
+    }
+    catch (const std::exception &)
+    {
+        // Malformed client input, not a server error.
+        return std::nullopt;
+    }
+}
+
+/// The canonical text form of a public key, as auth.user_keys stores it.
+[[nodiscard]] std::string encodeBase64(const std::vector<unsigned char> &bytes)
+{
+    // The encoded length includes the trailing NUL that libsodium writes.
+    std::string encoded(sodium_base64_ENCODED_LEN(bytes.size(),
+                                                  sodium_base64_VARIANT_ORIGINAL),
+                        '\0');
+    sodium_bin2base64(encoded.data(), encoded.size(),
+                      bytes.data(), bytes.size(),
+                      sodium_base64_VARIANT_ORIGINAL);
+    encoded.pop_back();   // drop the NUL
+    return encoded;
+}
+
+}
 
 class UserLoginAuthority::UserLoginAuthorityImpl :
     public Detail::DatabaseConnection::Database
@@ -165,6 +313,33 @@ public:
                 return result;
             });
     }
+
+    /// @result True if this is the first time the (key, jti) has been seen.
+    ///         False is a replay (or an inactive key).
+    [[nodiscard]] 
+    bool consumeAssertion(const std::string &key,
+                          const std::string &jti,
+                          const std::chrono::system_clock::time_point expiresAt)
+    {
+        constexpr std::string_view query
+        {
+            "SELECT auth.consume_assertion($1, $2, to_timestamp($3))"
+        };
+        const auto expiresAtSeconds
+            = std::chrono::duration_cast<std::chrono::seconds>
+              (expiresAt.time_since_epoch()).count();
+        const pqxx::params parameters{key, jti, expiresAtSeconds};
+        return withTransaction<pqxx::work>(
+            [&](pqxx::work &transaction) -> bool
+            {
+                auto row = transaction.exec(query, parameters).one_row();
+                const auto consumed = row.at(0).as<bool> ();
+                // Without the commit the jti isn't burned and the replay
+                // check is void.
+                transaction.commit();
+                return consumed;
+            });
+     }
 
     /// @brief Verify this user is an admin.
     [[nodiscard]] bool isAdministrator(const std::string &user)
@@ -469,11 +644,11 @@ UserLoginAuthority::loginWithPassword(
     }   
 }
 
-/// Login with password and get a token
+/// Login with a key
 std::expected<std::string, IAuthenticator::Result>
 UserLoginAuthority::loginWithKey(
-    const std::pair<std::string, std::string> &keyAndSignature,
-    const std::string &signedMessageIn) const
+    const std::vector<unsigned char> &publicKey,
+    const std::string &assertion) const
 {
     if (!isInitialized())
     {
@@ -481,38 +656,31 @@ UserLoginAuthority::loginWithKey(
                             "UserLoginAuthority not initialized");
         return std::unexpected(IAuthenticator::Result::ServerError);
     }
-    if (keyAndSignature.first.size() != crypto_sign_PUBLICKEYBYTES)
+    // Step 1: Verify signature before touching database
+    if (!::verifyAssertionSignature(publicKey, assertion))
     {
         SPDLOG_LOGGER_WARN(pImpl->mLogger,
-                         "Rejecting user; key length is wrong size");
+                           "Rejecting key login; bad signature");
         return std::unexpected(IAuthenticator::Result::InvalidCredentials);
     }
-    if (keyAndSignature.second.size() != crypto_sign_BYTES)
+    // Check the claims - alg(orithm) is eddsa, aud(ience) is issuer, and now
+    // the time is within in a minute to ensure this is short-lived
+    const auto claims
+        = ::parseAssertion(assertion,
+                           std::chrono::system_clock::now(),
+                           pImpl->mOptions.getIssuer());
+    if (!claims)
     {
         SPDLOG_LOGGER_WARN(pImpl->mLogger,
-                         "Rejecting user; signature is wrong size");
+                           "Rejecting key login; bad or expired assertion");
         return std::unexpected(IAuthenticator::Result::InvalidCredentials);
     }
-
-    if (signedMessageIn.empty())
-    {
-        SPDLOG_LOGGER_WARN(pImpl->mLogger,
-                           "Rejecting user because signed message is empty");
-        return std::unexpected(IAuthenticator::Result::InvalidCredentials);
-    }
-    unsigned char publicKey[crypto_sign_PUBLICKEYBYTES];
-    std::copy(keyAndSignature.first.begin(), keyAndSignature.first.end(),
-               publicKey);
-    unsigned char signature[crypto_sign_BYTES];
-    std::copy(keyAndSignature.second.begin(), keyAndSignature.second.end(),
-              signature);
-    std::vector<unsigned char> signedMessage(signedMessageIn.size());
-    std::copy(signedMessageIn.begin(), signedMessageIn.end(),
-              signedMessage.begin());    
+    auto encodedKey = ::encodeBase64(publicKey);
+    // Check the user actually installed this key
     std::string user;
     try
     {
-        auto userResult = pImpl->getUserByKey(keyAndSignature.first);
+        auto userResult = pImpl->getUserByKey(encodedKey);
         if (!userResult.has_value())
         {
             SPDLOG_LOGGER_WARN(pImpl->mLogger,
@@ -527,17 +695,37 @@ UserLoginAuthority::loginWithKey(
                            "Error getting user by key - {}", e.what());
         return std::unexpected(IAuthenticator::Result::ServerError);
     }
-    // Verify the signed message
-    if (crypto_sign_verify_detached(signature,
-                                    signedMessage.data(),
-                                    signedMessage.size(),
-                                    publicKey) != 0)
+    // Check the subject is the owner's key
+    if (user != claims->subject)
     {
         SPDLOG_LOGGER_WARN(pImpl->mLogger,
-              "Rejecting user login attempt; invalid signature");
+           "Rejecting key login; assertion subject {} is not key owner {}",
+           claims->subject, user);
         return std::unexpected(IAuthenticator::Result::InvalidCredentials);
     }
-    // Create the JWT
+
+    // Burn the key so it doesn't get used again - false indicates a replay
+    try
+    {
+        if (!pImpl->consumeAssertion(encodedKey, claims->jti,
+                                     claims->expiresAt))
+        {
+            SPDLOG_LOGGER_WARN(pImpl->mLogger,
+                               "Rejecting key login for {}; assertion replayed",
+                               user);
+            return std::unexpected(IAuthenticator::Result::InvalidCredentials);
+        }
+    }
+    catch (const std::exception &e)
+    {
+        SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+                            "Failed to consume assertion for {} because {}",
+                            user,
+                            e.what());
+        return std::unexpected(IAuthenticator::Result::ServerError);
+    }
+
+    // Mint the JWT
     std::string token;
     try          
     {
@@ -552,7 +740,7 @@ UserLoginAuthority::loginWithKey(
     }
     try
     {
-        if (!pImpl->recordKeyUse(keyAndSignature.second))
+        if (!pImpl->recordKeyUse(encodedKey))
         {
             SPDLOG_LOGGER_WARN(pImpl->mLogger,
                                "Failed to record key use for {}",
@@ -564,20 +752,6 @@ UserLoginAuthority::loginWithKey(
         SPDLOG_LOGGER_WARN(pImpl->mLogger,
                            "Failed to record key use for {} because {}",
                            user, e.what());
-    }
-// TODO do i need to do this?
-    try
-    {
-        if (!pImpl->recordLogin(user))
-        {
-            SPDLOG_LOGGER_WARN(pImpl->mLogger,
-                               "Failed to record login for {}",
-                               user);
-        }
-    }
-    catch (const std::exception &e)
-    {
-        SPDLOG_LOGGER_WARN(pImpl->mLogger, "Error recording login because {}", e.what());
     }
     return token;
 }

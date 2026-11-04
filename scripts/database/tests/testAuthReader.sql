@@ -94,6 +94,9 @@ BEGIN
     ($q$SELECT auth.add_user_key('alice', 'sneaky', 'pk-sneaky')$q$),
     ($q$SELECT auth.revoke_user_key('alice', 'laptop')$q$),
     ($q$SELECT auth.record_key_use('pk-alice-laptop')$q$),
+    --- Burning a jti is a write.  A reader holding it could burn the
+    --- jti of an assertion in flight and refuse someone's login.
+    ($q$SELECT auth.consume_assertion('pk-alice-laptop', 'jti-sneaky', NOW() + INTERVAL '30 seconds')$q$),
     --- The sweep deletes rows.  A reader holding it could empty the
     --- pending-user list.
     ($q$SELECT auth.delete_expired_provisional_users()$q$)

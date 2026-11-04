@@ -61,14 +61,13 @@ public:
                                       const std::string &newPassword) -> std::expected<void, ChangePasswordError>;
 
     /// @brief Key-based login.
-    /// @param[in] publicKeyAndSignature  The user's public key and
-    ///                                   the signature.
-    /// @result On success, this mints a new user token - i.e., this is
-    ///         not an admin token and cannot be used in administartor
-    ///         routes.
+    /// @param[in] publicKey  The user's public key.
+    /// @param[in] assertion  A JSON Web Signature signed by the client with
+    ///                       the EdDSA algorithm.
+    /// @result On success, this mints a new user token.
     [[nodiscard]] std::expected<std::string, IAuthenticator::Result>
-        loginWithKey(const std::pair<std::string, std::string> &publicKeyAndSignature,
-                     const std::string &signedMessage) const;
+        loginWithKey(const std::vector<unsigned char> &publicKey,
+                     const std::string &assertion) const;
 
     /// @brief Checks a password without minting a token.  This is for
     ///        changing a password and changing a key which demand the

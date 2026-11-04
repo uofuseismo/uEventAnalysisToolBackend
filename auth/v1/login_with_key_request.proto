@@ -3,15 +3,15 @@ edition = "2023";
 package UEventAnalysisToolAPI.Auth.V1;
 
 /**
- * User login request with a public key.
+ * User login request with an ed25519 public key.
  */
 message LoginWithKeyRequest {
-   // The user's name.
-   string name = 1;
-   // The user's PUBLIC key. 
-   string public_key = 2;
+   // The user's PUBLIC key.  This should be length 32U. 
+   bytes public_key = 1;
    // A fresh signature made with the public key.
-   string signature = 3;
+   bytes signature = 2;
+   // The user name with the user's public key and correspoding private key.
+   bytes signed_user = 3;    
    // The frontend version.
    string version = 4;
 }

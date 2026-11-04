@@ -325,6 +325,7 @@ if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
                             spdlog::spdlog_header_only
                             gRPC::grpc gRPC::grpc++
                             Threads::Threads
+                            libsodium::libsodium
                             jwt-cpp::jwt-cpp Boost::json libpqxx::pqxx
                             Catch2::Catch2 Catch2::Catch2WithMain)
    target_include_directories(unitTests

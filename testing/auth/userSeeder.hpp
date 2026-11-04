@@ -98,6 +98,80 @@ public:
                                    + permission + " on " + schema);
         }
     }
+    /// @brief Registers a public key, in the encoded form auth.user_keys
+    ///        stores.  It goes when the user does.
+    void addKey(const std::string &name,
+                const std::string &keyName,
+                const std::string &encodedPublicKey)
+    {
+        pqxx::work transaction{*mConnection};
+        const auto added
+            = transaction.exec("SELECT auth.add_user_key($1, $2, $3)",
+                               pqxx::params {name, keyName, encodedPublicKey})
+                         .one_row()[0].as<bool> ();
+        transaction.commit();
+        if (!added)
+        {
+            throw std::runtime_error("Could not add key " + keyName
+                                   + " for " + name);
+        }
+    }
+    void revokeKey(const std::string &name, const std::string &keyName)
+    {
+        pqxx::work transaction{*mConnection};
+        transaction.exec("SELECT auth.revoke_user_key($1, $2)",
+                         pqxx::params {name, keyName});
+        transaction.commit();
+    }
+    /// @result True if the key's last_used has been set.
+    [[nodiscard]] bool keyHasBeenUsed(const std::string &name,
+                                      const std::string &keyName)
+    {
+        pqxx::nontransaction transaction{*mConnection};
+        const auto row
+            = transaction.exec("SELECT last_used FROM auth.list_user_keys($1)"
+                               " WHERE key_name = $2",
+                               pqxx::params {name, keyName}).one_row();
+        return !row[0].is_null();
+    }
+    /// @result True if the key has been revoked.
+    [[nodiscard]] bool keyIsRevoked(const std::string &name,
+                                    const std::string &keyName)
+    {
+        pqxx::nontransaction transaction{*mConnection};
+        const auto row
+            = transaction.exec("SELECT revoked FROM auth.list_user_keys($1)"
+                               " WHERE key_name = $2",
+                               pqxx::params {name, keyName}).one_row();
+        return !row[0].is_null();
+    }
+    /// @brief Removes a user someone else created - e.g., the class under
+    ///        test - along with the seeded ones.
+    void track(const std::string &name)
+    {
+        mNames.push_back(name);
+    }
+    /// @result True if the user exists at all.
+    [[nodiscard]] bool exists(const std::string &name)
+    {
+        pqxx::nontransaction transaction{*mConnection};
+        return transaction.exec("SELECT auth.get_user_name($1) IS NOT NULL",
+                                pqxx::params {name})
+                          .one_row()[0].as<bool> ();
+    }
+    /// @result True if the user's is_admin flag is set.  Not
+    ///         auth.user_is_admin, which also demands an activated user.
+    [[nodiscard]] bool isAdministrator(const std::string &name)
+    {
+        return column(name, "is_admin") == std::optional<std::string> {"true"};
+    }
+    /// @result The number of activated administrators in the database.
+    [[nodiscard]] int countActiveAdministrators()
+    {
+        pqxx::nontransaction transaction{*mConnection};
+        return transaction.exec("SELECT auth.count_active_admins()")
+                          .one_row()[0].as<int> ();
+    }
     /// @result True if the user's last_login has been set.
     [[nodiscard]] bool hasLoggedIn(const std::string &name)
     {

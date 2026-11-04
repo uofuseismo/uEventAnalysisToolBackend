@@ -10,6 +10,9 @@
 #include <vector>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <boost/json/array.hpp>
+#include <boost/json/object.hpp>
+#include <boost/json/serialize.hpp>
 #include <jwt-cpp/jwt.h>
 #include <jwt-cpp/traits/boost-json/traits.h>
 #include "uEventAnalysisToolBackend/auth/authenticator.hpp"
@@ -22,6 +25,7 @@
 #include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
 #include "integrationDatabase.hpp"
+#include "keyAssertion.hpp"
 #include "userSeeder.hpp"
 
 using namespace UEventAnalysisToolBackend::Auth;
@@ -342,5 +346,255 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::UserLoginAuthority",
         REQUIRE(rehashing.loginWithPassword(std::pair {user, password})
                     .has_value());
         REQUIRE(seeder.passwordHash(user) == after);
+    }
+}
+
+TEST_CASE("UEventAnalysisToolBackend::Auth::UserLoginAuthority::loginWithKey",
+          "[.integration][UserLoginAuthority]")
+{
+    const auto suffix = IntegrationDatabase::uniqueSuffix();
+    const auto application = "ueat-key-login-test-" + suffix;
+    const auto backendCredentials
+        = IntegrationDatabase::credentials(application);
+    const auto superuserCredentials
+        = IntegrationDatabase::superuserCredentials(application + "-seeder");
+    if (!backendCredentials || !superuserCredentials)
+    {
+        SKIP("Set UEAT_TEST_DB_{HOST,PORT,NAME,USER,PASSWORD} and "
+             "UEAT_TEST_DB_SUPERUSER{,_PASSWORD} to run this");
+    }
+
+    const std::string user{"guy-am-i-" + suffix};
+    const std::string other{"sam-i-am-" + suffix};
+    INFO("suffix = " << suffix);
+
+    // user holds laptop and an already-revoked old key; other holds one
+    // of their own.  stranger is registered to nobody.
+    const IntegrationDatabase::KeyPair laptop;
+    const IntegrationDatabase::KeyPair old;
+    const IntegrationDatabase::KeyPair othersKey;
+    const IntegrationDatabase::KeyPair stranger;
+
+    IntegrationDatabase::UserSeeder seeder{*superuserCredentials, password};
+    seeder.addUser(user, false);
+    seeder.setPermission(user, "utah", "read_write");
+    seeder.addKey(user, "laptop", laptop.encodedPublicKey());
+    seeder.addKey(user, "old", old.encodedPublicKey());
+    seeder.revokeKey(user, "old");
+    seeder.addUser(other, false);
+    seeder.addKey(other, "laptop", othersKey.encodedPublicKey());
+
+    const UserLoginAuthority authority{
+        options(*backendCredentials, IntegrationDatabase::cheapHasherOptions()),
+        IntegrationDatabase::quietLogger("userKeyLoginTests")};
+    REQUIRE(authority.isInitialized());
+
+    TokenVerifierOptions verifierOptions;
+    verifierOptions.setPublicKeyAndAlgorithm(
+        loadKey("ed25519-public-key.pem"),
+        TokenVerifierOptions::Algorithm::EdDSA25519);
+    verifierOptions.setIssuer(issuer);
+    const UserTokenVerifier verifier{
+        verifierOptions,
+        IntegrationDatabase::quietLogger("userKeyLoginTests")};
+
+    const auto header = IntegrationDatabase::assertionHeader();
+    auto payload = IntegrationDatabase::assertionPayload(user, issuer);
+    const auto now = payload.at("iat").as_int64();
+    // Every refusal must be InvalidCredentials: bad client input is never
+    // a server error.
+    const auto refused = [&](const std::vector<unsigned char> &publicKey,
+                             const std::string &assertion)
+    {
+        const auto token = authority.loginWithKey(publicKey, assertion);
+        return !token.has_value() &&
+               token.error() == Result::InvalidCredentials;
+    };
+
+    SECTION("A signed assertion gets a user token")
+    {
+        const auto token
+            = authority.loginWithKey(laptop.publicKey(),
+                                     laptop.sign(header, payload));
+        REQUIRE(token.has_value());
+        const auto [result, claims] = verifier.verify(*token);
+        REQUIRE(result == Result::Authenticated);
+        REQUIRE(claims.has_value());
+        if (claims)
+        {
+            REQUIRE(claims->getUser() == user);
+            REQUIRE_FALSE(Claims::isAdministrator(*claims));
+            const Permissions permissions(claims->begin(), claims->end());
+            REQUIRE(permissions == Permissions {{"utah", "read_write"}});
+        }
+        // record_key_use stamps both.
+        REQUIRE(seeder.keyHasBeenUsed(user, "laptop"));
+        REQUIRE(seeder.hasLoggedIn(user));
+    }
+    SECTION("An assertion logs in once")
+    {
+        const auto assertion = laptop.sign(header, payload);
+        REQUIRE(authority.loginWithKey(laptop.publicKey(), assertion)
+                    .has_value());
+        REQUIRE(refused(laptop.publicKey(), assertion));
+        // A fresh assertion from the same key is fine.
+        payload["jti"] = IntegrationDatabase::randomJti();
+        REQUIRE(authority.loginWithKey(laptop.publicKey(),
+                                       laptop.sign(header, payload))
+                    .has_value());
+    }
+    SECTION("The subject is matched case-insensitively")
+    {
+        payload["sub"] = toUpper(user);
+        const auto token
+            = authority.loginWithKey(laptop.publicKey(),
+                                     laptop.sign(header, payload));
+        REQUIRE(token.has_value());
+        const auto [result, claims] = verifier.verify(*token);
+        REQUIRE(claims.has_value());
+        if (claims){REQUIRE(claims->getUser() == user);}
+    }
+    SECTION("An array audience naming this server is accepted")
+    {
+        payload["aud"] = boost::json::array {"someone-else", issuer};
+        REQUIRE(authority.loginWithKey(laptop.publicKey(),
+                                       laptop.sign(header, payload))
+                    .has_value());
+    }
+    SECTION("Only the holder of a registered, active key gets in")
+    {
+        // Signed by a different key than the one presented.
+        REQUIRE(refused(laptop.publicKey(), stranger.sign(header, payload)));
+        // Signed by, and presenting, a key nobody registered.
+        REQUIRE(refused(stranger.publicKey(), stranger.sign(header, payload)));
+        // A revoked key.
+        REQUIRE(refused(old.publicKey(), old.sign(header, payload)));
+        REQUIRE_FALSE(seeder.hasLoggedIn(user));
+    }
+    SECTION("A key logs in only as its owner")
+    {
+        // user's key claiming to be other, and other's key claiming to be
+        // user: the key decides who this is, and the claim disagrees.
+        payload["sub"] = other;
+        const auto assertion = laptop.sign(header, payload);
+        REQUIRE(refused(laptop.publicKey(), assertion));
+        payload["sub"] = user;
+        REQUIRE(refused(othersKey.publicKey(),
+                        othersKey.sign(header, payload)));
+        // The refusal didn't burn the jti: checked before consuming.
+        REQUIRE(authority.loginWithKey(laptop.publicKey(),
+                                       laptop.sign(header, payload))
+                    .has_value());
+    }
+    SECTION("A tampered assertion is refused")
+    {
+        // Swap in another payload under the original signature.
+        const auto assertion = laptop.sign(header, payload);
+        auto forged = payload;
+        forged["sub"] = other;
+        const auto firstDot = assertion.find('.');
+        const auto lastDot = assertion.rfind('.');
+        const auto tampered
+            = assertion.substr(0, firstDot) + "."
+            + IntegrationDatabase::toBase64Url(boost::json::serialize(forged))
+            + assertion.substr(lastDot);
+        REQUIRE(refused(laptop.publicKey(), tampered));
+        // A flipped signature character.
+        auto flipped = assertion;
+        flipped.back() = flipped.back() == 'A' ? 'B' : 'A';
+        REQUIRE(refused(laptop.publicKey(), flipped));
+    }
+    SECTION("The assertion must be short-lived and current")
+    {
+        auto expired = payload;
+        expired["iat"] = now - 30;
+        expired["exp"] = now - 1;
+        REQUIRE(refused(laptop.publicKey(), laptop.sign(header, expired)));
+
+        auto tooLong = payload;
+        tooLong["exp"] = now + 61;
+        REQUIRE(refused(laptop.publicKey(), laptop.sign(header, tooLong)));
+
+        auto future = payload;
+        future["iat"] = now + 60;
+        future["exp"] = now + 90;
+        REQUIRE(refused(laptop.publicKey(), laptop.sign(header, future)));
+
+        // Exactly the limit is fine.
+        auto limit = payload;
+        limit["exp"] = now + 60;
+        REQUIRE(authority.loginWithKey(laptop.publicKey(),
+                                       laptop.sign(header, limit))
+                    .has_value());
+    }
+    SECTION("The assertion must be for this server")
+    {
+        payload["aud"] = "some-other-service";
+        REQUIRE(refused(laptop.publicKey(), laptop.sign(header, payload)));
+    }
+    SECTION("Every claim is required")
+    {
+        for (const auto *claim : {"sub", "aud", "iat", "exp", "jti"})
+        {
+            INFO("without " << claim);
+            auto missing = payload;
+            missing.erase(claim);
+            REQUIRE(refused(laptop.publicKey(), laptop.sign(header, missing)));
+        }
+        auto emptyJti = payload;
+        emptyJti["jti"] = "";
+        REQUIRE(refused(laptop.publicKey(), laptop.sign(header, emptyJti)));
+        auto longJti = payload;
+        longJti["jti"] = std::string(129, 'j');
+        REQUIRE(refused(laptop.publicKey(), laptop.sign(header, longJti)));
+        auto emptySubject = payload;
+        emptySubject["sub"] = "";
+        REQUIRE(refused(laptop.publicKey(),
+                        laptop.sign(header, emptySubject)));
+    }
+    SECTION("The header cannot choose the algorithm")
+    {
+        // Correctly signed with Ed25519, but claiming otherwise.
+        for (const auto *algorithm : {"none", "HS256", "RS256", "eddsa"})
+        {
+            INFO("alg = " << algorithm);
+            auto lying = header;
+            lying["alg"] = algorithm;
+            REQUIRE(refused(laptop.publicKey(), laptop.sign(lying, payload)));
+        }
+        auto noAlgorithm = header;
+        noAlgorithm.erase("alg");
+        REQUIRE(refused(laptop.publicKey(), laptop.sign(noAlgorithm, payload)));
+    }
+    SECTION("Malformed input is refused, not a server error")
+    {
+        const auto assertion = laptop.sign(header, payload);
+        for (const std::string &garbage :
+                 {std::string {}, std::string {"."}, std::string {".."},
+                  std::string {"abc"}, std::string {"a.b"},
+                  std::string {"a.b.c"}, assertion + ".extra",
+                  "." + assertion, assertion.substr(0, assertion.rfind('.')),
+                  assertion.substr(0, assertion.rfind('.') + 1),
+                  assertion + "=",
+                  std::string(4097, 'a')})
+        {
+            INFO("assertion = " << garbage.substr(0, 64));
+            REQUIRE(refused(laptop.publicKey(), garbage));
+        }
+        // An oversized but otherwise valid assertion.
+        auto padded = payload;
+        padded["padding"] = std::string(4096, 'p');
+        REQUIRE(refused(laptop.publicKey(), laptop.sign(header, padded)));
+        // Public keys of the wrong length.
+        auto shortKey = laptop.publicKey();
+        shortKey.pop_back();
+        REQUIRE(refused(shortKey, assertion));
+        auto longKey = laptop.publicKey();
+        longKey.push_back(0);
+        REQUIRE(refused(longKey, assertion));
+        REQUIRE(refused({}, assertion));
+        // None of that burned the jti.
+        REQUIRE(authority.loginWithKey(laptop.publicKey(), assertion)
+                    .has_value());
     }
 }

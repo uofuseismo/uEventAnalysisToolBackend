@@ -162,6 +162,38 @@ BEGIN
     IF auth.admin_add_user('root', 'bob', '') THEN
         RAISE EXCEPTION 'FAIL: admin_add_user accepted an empty hash';
     END IF;
+    --- Names are [a-z0-9._@-]{1,64} after trimming and lower-casing.
+    --- A bad name is FALSE like any other bad input, not an error.
+    IF auth.admin_add_user('root', 'b o b', 'hash') THEN
+        RAISE EXCEPTION 'FAIL: admin_add_user accepted a name with a space';
+    END IF;
+    IF auth.admin_add_user('root', 'bob;drop', 'hash') THEN
+        RAISE EXCEPTION 'FAIL: admin_add_user accepted a name with a semicolon';
+    END IF;
+    IF auth.admin_add_provisional_user('root', 'bøb', 'hash',
+                                       INTERVAL '1 hour') THEN
+        RAISE EXCEPTION 'FAIL: admin_add_provisional_user accepted a non-ASCII name';
+    END IF;
+    IF auth.admin_add_user('root', repeat('a', 65), 'hash') THEN
+        RAISE EXCEPTION 'FAIL: admin_add_user accepted a 65-character name';
+    END IF;
+    IF auth.admin_add_provisional_user('root', repeat('a', 65), 'hash',
+                                       INTERVAL '1 hour') THEN
+        RAISE EXCEPTION 'FAIL: admin_add_provisional_user accepted a 65-character name';
+    END IF;
+    IF NOT auth.admin_add_user('root', repeat('a', 64), 'hash') THEN
+        RAISE EXCEPTION 'FAIL: admin_add_user refused a 64-character name';
+    END IF;
+    IF NOT auth.admin_add_user('root', ' Sam-I.Am_2@Example.org ', 'hash') THEN
+        RAISE EXCEPTION 'FAIL: admin_add_user refused an email-style name';
+    END IF;
+    IF auth.get_user_name('sam-i.am_2@example.org') IS NULL THEN
+        RAISE EXCEPTION 'FAIL: email-style name not stored canonically';
+    END IF;
+    IF NOT auth.admin_remove_user('root', repeat('a', 64))
+       OR NOT auth.admin_remove_user('root', 'sam-i.am_2@example.org') THEN
+        RAISE EXCEPTION 'FAIL: could not remove the name-pattern users';
+    END IF;
     IF auth.get_password_hash('Alice') IS DISTINCT FROM 'hash-alice' THEN
         RAISE EXCEPTION 'FAIL: wrong hash for alice';
     END IF;
@@ -216,20 +248,71 @@ BEGIN
     IF auth.get_user_permission('alice', 'ynp') IS NOT NULL THEN
         RAISE EXCEPTION 'FAIL: alice still holds ynp';
     END IF;
-    IF auth.admin_set_user_permission('root', 'alice', 'atlantis', 'read_only') THEN
-        RAISE EXCEPTION 'FAIL: granted an unknown schema';
-    END IF;
-    IF auth.admin_set_user_permission('root', 'alice', 'utah', 'wheel') THEN
-        RAISE EXCEPTION 'FAIL: granted an unknown permission';
-    END IF;
     IF auth.admin_set_user_permission('root', 'nobody', 'utah', 'read_only') THEN
         RAISE EXCEPTION 'FAIL: granted a permission to nobody';
+    END IF;
+    --- Nothing to revoke is FALSE, for a real user or a missing one.
+    IF auth.admin_revoke_user_permission('root', 'alice', 'ynp') THEN
+        RAISE EXCEPTION 'FAIL: revoked a grant alice does not hold';
+    END IF;
+    IF auth.admin_revoke_user_permission('root', 'nobody', 'utah') THEN
+        RAISE EXCEPTION 'FAIL: revoked a grant from nobody';
     END IF;
     --- Administrator is global and separate: it confers no data access.
     IF auth.get_user_permission('root', 'utah') IS NOT NULL THEN
         RAISE EXCEPTION 'FAIL: being admin implied a schema permission';
     END IF;
     RAISE NOTICE 'ok: schema permissions';
+END $$;
+
+--- An unknown schema or permission RAISEs, each with its own SQLSTATE,
+--- so the backend can tell them from each other and from no such user.
+--- Checked before the user, so a bad schema is reported even for nobody.
+DO $$
+BEGIN
+    PERFORM auth.admin_set_user_permission('root', 'alice', 'atlantis', 'read_only');
+    RAISE EXCEPTION 'FAIL: granted an unknown schema';
+EXCEPTION WHEN invalid_parameter_value THEN
+    IF SQLERRM NOT LIKE 'unknown schema%' THEN RAISE; END IF;
+    RAISE NOTICE 'ok: refused an unknown schema';
+END $$;
+
+DO $$
+BEGIN
+    PERFORM auth.admin_set_user_permission('root', 'nobody', 'atlantis', 'read_only');
+    RAISE EXCEPTION 'FAIL: granted nobody an unknown schema';
+EXCEPTION WHEN invalid_parameter_value THEN
+    IF SQLERRM NOT LIKE 'unknown schema%' THEN RAISE; END IF;
+    RAISE NOTICE 'ok: unknown schema reported before unknown user';
+END $$;
+
+DO $$
+BEGIN
+    PERFORM auth.admin_set_user_permission('root', 'alice', 'utah', 'wheel');
+    RAISE EXCEPTION 'FAIL: granted an unknown permission';
+EXCEPTION WHEN undefined_object THEN
+    IF SQLERRM NOT LIKE 'unknown permission%' THEN RAISE; END IF;
+    RAISE NOTICE 'ok: refused an unknown permission';
+END $$;
+
+DO $$
+BEGIN
+    PERFORM auth.admin_revoke_user_permission('root', 'alice', 'atlantis');
+    RAISE EXCEPTION 'FAIL: revoked an unknown schema';
+EXCEPTION WHEN invalid_parameter_value THEN
+    IF SQLERRM NOT LIKE 'unknown schema%' THEN RAISE; END IF;
+    RAISE NOTICE 'ok: revoke refused an unknown schema';
+END $$;
+
+--- The actor is checked first: a non-admin learns nothing about which
+--- schemas exist.
+DO $$
+BEGIN
+    PERFORM auth.admin_set_user_permission('alice', 'alice', 'atlantis', 'read_only');
+    RAISE EXCEPTION 'FAIL: non-admin reached the schema check';
+EXCEPTION WHEN insufficient_privilege THEN
+    IF SQLERRM NOT LIKE 'not authorized%' THEN RAISE; END IF;
+    RAISE NOTICE 'ok: actor checked before schema';
 END $$;
 
 --------------------------------------------------------------------------
@@ -603,7 +686,7 @@ DO $$
 BEGIN
     PERFORM auth.admin_set_user_admin('root', 'root', FALSE);
     RAISE EXCEPTION 'FAIL: the last admin demoted themselves';
-EXCEPTION WHEN insufficient_privilege THEN
+EXCEPTION WHEN object_in_use THEN
     IF SQLERRM NOT LIKE 'refusing%' THEN RAISE; END IF;
     RAISE NOTICE 'ok: refused to demote the last admin';
 END $$;
@@ -612,7 +695,7 @@ DO $$
 BEGIN
     PERFORM auth.admin_remove_user('root', 'root');
     RAISE EXCEPTION 'FAIL: the last admin deleted themselves';
-EXCEPTION WHEN insufficient_privilege THEN
+EXCEPTION WHEN object_in_use THEN
     IF SQLERRM NOT LIKE 'refusing%' THEN RAISE; END IF;
     RAISE NOTICE 'ok: refused to delete the last admin';
 END $$;
@@ -625,7 +708,7 @@ BEGIN
     PERFORM auth.admin_reset_user_password('root', 'root', 'hash-reset',
                                            INTERVAL '1 hour', FALSE);
     RAISE EXCEPTION 'FAIL: the last admin reset themselves into a lockout';
-EXCEPTION WHEN insufficient_privilege THEN
+EXCEPTION WHEN object_in_use THEN
     IF SQLERRM NOT LIKE 'refusing%' THEN RAISE; END IF;
     RAISE NOTICE 'ok: refused to reset the last admin';
 END $$;
@@ -635,7 +718,7 @@ BEGIN
     PERFORM auth.admin_reset_user_password('root', 'root', 'hash-reset',
                                            INTERVAL '1 hour', TRUE);
     RAISE EXCEPTION 'FAIL: the last admin compromise-reset themselves';
-EXCEPTION WHEN insufficient_privilege THEN
+EXCEPTION WHEN object_in_use THEN
     IF SQLERRM NOT LIKE 'refusing%' THEN RAISE; END IF;
     RAISE NOTICE 'ok: refused to compromise-reset the last admin';
 END $$;

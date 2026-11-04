@@ -44,7 +44,9 @@ CREATE TABLE auth.user_schema_permissions(
 );
 
 --- Grants (or updates) a user's permission on a schema.
---- Returns FALSE if the user, schema, or permission doesn't exist.
+--- Returns FALSE if the user doesn't exist.  An unknown schema RAISEs
+--- invalid_parameter_value and an unknown permission undefined_object,
+--- so the caller can say which was wrong.
 --- Ungated and granted to no role; the backend calls
 --- auth.admin_set_user_permission.
 CREATE OR REPLACE FUNCTION auth.set_user_permission(
@@ -60,7 +62,15 @@ BEGIN
       FROM auth.schemas WHERE schema_name = lower(trim(p_schema));
     SELECT permission_id INTO v_permission_id
       FROM auth.permissions WHERE permission_name = lower(trim(p_permission));
-    IF v_user_id IS NULL OR v_schema_id IS NULL OR v_permission_id IS NULL THEN
+    IF v_schema_id IS NULL THEN
+        RAISE EXCEPTION 'unknown schema: %', p_schema
+              USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    IF v_permission_id IS NULL THEN
+        RAISE EXCEPTION 'unknown permission: %', p_permission
+              USING ERRCODE = 'undefined_object';
+    END IF;
+    IF v_user_id IS NULL THEN
         RETURN FALSE;
     END IF;
     INSERT INTO auth.user_schema_permissions (user_id, schema_id, permission_id)
@@ -73,13 +83,20 @@ END;
 $$ LANGUAGE plpgsql;
 
 --- Revokes a user's permission on a schema.  Returns TRUE if a row
---- was deleted.  Ungated and granted to no role; the backend calls
+--- was deleted; FALSE if there was no such user or grant.  An unknown
+--- schema RAISEs invalid_parameter_value, as above.  Ungated and
+--- granted to no role; the backend calls
 --- auth.admin_revoke_user_permission.
 CREATE OR REPLACE FUNCTION auth.revoke_user_permission(
     p_name TEXT, p_schema TEXT)
 RETURNS BOOLEAN AS $$
 DECLARE n_deleted INTEGER;
 BEGIN
+    IF NOT EXISTS (SELECT 1 FROM auth.schemas
+                    WHERE schema_name = lower(trim(p_schema))) THEN
+        RAISE EXCEPTION 'unknown schema: %', p_schema
+              USING ERRCODE = 'invalid_parameter_value';
+    END IF;
     DELETE FROM auth.user_schema_permissions usp
      USING auth.users u, auth.schemas s
      WHERE usp.user_id = u.user_id

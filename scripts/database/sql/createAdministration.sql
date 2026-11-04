@@ -12,7 +12,15 @@
 --- Authorization failure RAISEs insufficient_privilege (SQLSTATE 42501)
 --- instead of returning FALSE.  A boolean cannot distinguish 'you may
 --- not' from 'that did not work', and those are PERMISSION_DENIED and
---- INVALID_ARGUMENT to the frontend.  Bad input still returns FALSE.
+--- INVALID_ARGUMENT to the frontend.  The other refusals the backend
+--- must tell apart get SQLSTATEs of their own:
+---     55006 object_in_use            this would leave no administrator
+---     22023 invalid_parameter_value  no such schema
+---     42704 undefined_object         no such permission level (the
+---                                    backend sends an enum, so this is
+---                                    a deployment bug, not user input)
+--- Anything else that is wrong (no such user, nothing to revoke)
+--- returns FALSE.
 ---
 --- Runs after createUsersTable.sql and createPermissionsTables.sql;
 --- it wraps functions from both.
@@ -96,7 +104,7 @@ BEGIN
                FOR UPDATE) locked_admins;
     IF n_admins <= 1 THEN
         RAISE EXCEPTION 'refusing to leave the database with no administrator'
-              USING ERRCODE = 'insufficient_privilege';
+              USING ERRCODE = 'object_in_use';
     END IF;
 END;
 $$ LANGUAGE plpgsql;

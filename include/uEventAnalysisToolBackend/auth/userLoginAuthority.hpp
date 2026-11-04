@@ -61,13 +61,13 @@ public:
                                       const std::string &newPassword) -> std::expected<void, ChangePasswordError>;
 
     /// @brief Key-based login.
-    /// @param[in] userNameAndKey   The user name (first) and the
-    ///                             user's public key (second).
+    /// @param[in] publicKeyAndSignature  The user's public key and
+    ///                                   the signature.
     /// @result On success, this mints a new user token - i.e., this is
     ///         not an admin token and cannot be used in administartor
     ///         routes.
-    // [[nodiscard]] std::expected<std::string, IAuthenticator::Result>
-    //    loginWithKey(const std::pair<std::string, std::string> &userNameAndKey) const; 
+    [[nodiscard]] std::expected<std::string, IAuthenticator::Result>
+        loginWithKey(const std::pair<std::string, std::string> &publicKeyAndSignature) const; 
 
     /// @brief Checks a password without minting a token.  This is for
     ///        changing a password and changing a key which demand the

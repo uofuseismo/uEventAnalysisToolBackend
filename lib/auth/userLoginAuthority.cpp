@@ -14,6 +14,7 @@
 #include <spdlog/logger.h>
 #include <spdlog/sinks/stdout_color_sinks.h> //NOLINT
 #include <boost/json/object.hpp>
+#include <sodium/crypto_sign.h>
 #include <jwt-cpp/jwt.h>
 #include <jwt-cpp/traits/boost-json/traits.h>
 #include "uEventAnalysisToolBackend/auth/userLoginAuthority.hpp"
@@ -466,6 +467,99 @@ UserLoginAuthority::loginWithPassword(
                            e.what(), user);
         return std::unexpected(IAuthenticator::Result::ServerError);
     }   
+}
+
+/// Login with password and get a token
+std::expected<std::string, IAuthenticator::Result>
+UserLoginAuthority::loginWithKey(
+    const std::pair<std::string, std::string> &keyAndSignature) const
+{
+    if (!isInitialized())
+    {
+        SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+                            "UserLoginAuthority not initialized");
+        return std::unexpected(IAuthenticator::Result::ServerError);
+    }
+    if (keyAndSignature.first.empty())
+    {
+        SPDLOG_LOGGER_WARN(pImpl->mLogger,
+                         "Rejecting user login attempt because key is empty");
+        return std::unexpected(IAuthenticator::Result::InvalidCredentials);
+    }
+// TODO copy public key and check size
+    std::string user;
+    try
+    {
+        auto userResult = pImpl->getUserByKey(keyAndSignature.first);
+        if (!userResult.has_value())
+        {
+            SPDLOG_LOGGER_WARN(pImpl->mLogger,
+               "No corresponding key found for user login attempt");
+            return std::unexpected(IAuthenticator::Result::InvalidCredentials);
+        } 
+        user = std::move(*userResult);
+    }
+    catch (const std::exception &e)
+    {
+        SPDLOG_LOGGER_WARN(pImpl->mLogger,
+                           "Error getting user by key - {}", e.what());
+        return std::unexpected(IAuthenticator::Result::ServerError);
+    }
+    unsigned char signature[crypto_sign_BYTES];
+    unsigned char publicKey[crypto_sign_PUBLICKEYBYTES];
+    std::vector<unsigned char> signedMessage;
+    if (crypto_sign_verify_detached(signature,
+                                    signedMessage.data(),
+                                    signedMessage.size(),
+                                    publicKey) != 0)
+    {
+        SPDLOG_LOGGER_WARN(pImpl->mLogger,
+              "Rejecting user login attempt; invalid signature");
+        return std::unexpected(IAuthenticator::Result::InvalidCredentials);
+    }
+    // Create the JWT
+    std::string token;
+    try          
+    {
+        token = pImpl->createToken(user);
+    }
+    catch (const std::exception &e) 
+    { 
+        SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+                            "Failed to create token for {} because {}",
+                            user, e.what());
+        return std::unexpected(IAuthenticator::Result::ServerError);
+    }
+    try
+    {
+        if (!pImpl->recordKeyUse(keyAndSignature.second))
+        {
+            SPDLOG_LOGGER_WARN(pImpl->mLogger,
+                               "Failed to record key use for {}",
+                               user);
+        }
+    }
+    catch (const std::exception &e)
+    {
+        SPDLOG_LOGGER_WARN(pImpl->mLogger,
+                           "Failed to record key use for {} because {}",
+                           user, e.what());
+    }
+// TODO do i need to do this?
+    try
+    {
+        if (!pImpl->recordLogin(user))
+        {
+            SPDLOG_LOGGER_WARN(pImpl->mLogger,
+                               "Failed to record login for {}",
+                               user);
+        }
+    }
+    catch (const std::exception &e)
+    {
+        SPDLOG_LOGGER_WARN(pImpl->mLogger, "Error recording login because {}", e.what());
+    }
+    return token;
 }
 
 /// Change the user name and password

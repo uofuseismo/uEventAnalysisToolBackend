@@ -25,6 +25,7 @@
 
 #include "uEventAnalysisToolBackend/auth/administratorLoginAuthority.hpp"
 #include "uEventAnalysisToolBackend/auth/administratorTokenVerifier.hpp"
+#include "uEventAnalysisToolBackend/auth/userAdministration.hpp"
 #include "uEventAnalysisToolBackend/auth/userLoginAuthority.hpp"
 #include "uEventAnalysisToolBackend/auth/userTokenVerifier.hpp"
 //#include "uEventAnalysisToolBackend/database/credentials.hpp"
@@ -130,6 +131,11 @@ public:
             = std::make_shared<UEAT::Auth::UserLoginAuthority> (
                 mOptions.userLoginAuthorityOptions,
                 mLogger);
+
+        mUserAdministration
+            = std::make_unique<UEAT::Auth::UserAdministration> (
+                 mOptions.userAdminOptions,
+                 mLogger);
 
         // Create the services
         std::map<std::string, std::unique_ptr<grpc::Service>> servicesMap;
@@ -287,6 +293,8 @@ public:
         mAdministratorLoginAuthority{nullptr};
     std::shared_ptr<UEventAnalysisToolBackend::Auth::AdministratorTokenVerifier>
         mAdministratorTokenVerifier{nullptr};
+    std::shared_ptr<UEventAnalysisToolBackend::Auth::UserAdministration>
+        mUserAdministration{nullptr};
     std::shared_ptr<UEventAnalysisToolBackend::Auth::UserLoginAuthority>
         mUserLoginAuthority{nullptr};
     std::shared_ptr<UEventAnalysisToolBackend::Auth::UserTokenVerifier>

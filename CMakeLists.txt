@@ -72,12 +72,15 @@ set(HEADER_FILES
     include/uEventAnalysisToolBackend/auth/administratorLoginAuthorityOptions.hpp
     include/uEventAnalysisToolBackend/auth/administratorTokenVerifier.hpp
     include/uEventAnalysisToolBackend/auth/authenticator.hpp
+    include/uEventAnalysisToolBackend/auth/userAdministration.hpp
+    include/uEventAnalysisToolBackend/auth/userAdministrationOptions.hpp
     include/uEventAnalysisToolBackend/auth/userLoginAuthority.hpp
     include/uEventAnalysisToolBackend/auth/userLoginAuthorityOptions.hpp
     include/uEventAnalysisToolBackend/auth/password/hasher.hpp
     include/uEventAnalysisToolBackend/auth/password/hasherOptions.hpp
     include/uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp
     include/uEventAnalysisToolBackend/database/credentials.hpp
+    #include/uEventAnalysisToolBackend/grpc/bearerAuthenticator.hpp
     include/uEventAnalysisToolBackend/grpc/grpcServerOptions.hpp
     include/uEventAnalysisToolBackend/grpc/parseAuthorizationHeader.hpp
     include/uEventAnalysisToolBackend/grpc/requestIdentifierInterceptor.hpp
@@ -85,6 +88,7 @@ set(HEADER_FILES
     include/uEventAnalysisToolBackend/grpc/server.hpp
     include/uEventAnalysisToolBackend/grpc/serverOptions.hpp
     include/uEventAnalysisToolBackend/grpc/toRequestIdentifier.hpp
+    include/uEventAnalysisToolBackend/grpc/unaryReactor.hpp
     include/uEventAnalysisToolBackend/services/adminService.hpp
     include/uEventAnalysisToolBackend/services/authService.hpp
     )
@@ -106,6 +110,8 @@ set(LIBRARY_SRC
     lib/auth/administratorLoginAuthorityOptions.cpp
     lib/auth/administratorTokenVerifier.cpp
     lib/auth/authenticator.cpp
+    lib/auth/userAdministration.cpp
+    lib/auth/userAdministrationOptions.cpp
     lib/auth/userLoginAuthority.cpp
     lib/auth/userLoginAuthorityOptions.cpp
     lib/auth/userTokenVerifier.cpp
@@ -114,6 +120,7 @@ set(LIBRARY_SRC
     lib/auth/password/hasherOptions.cpp
     lib/auth/password/passwordPolicy.cpp
     lib/database/credentials.cpp
+    #lib/grpc/bearerAuthenticator.cpp
     lib/grpc/grpcServerOptions.cpp
     lib/grpc/parseAuthorizationHeader.cpp
     lib/grpc/requestIdentifierInterceptor.cpp
@@ -121,6 +128,7 @@ set(LIBRARY_SRC
     lib/grpc/server.cpp
     lib/grpc/serverOptions.cpp
     lib/grpc/toRequestIdentifier.cpp
+    lib/grpc/unaryReactor.cpp
     lib/services/adminService.cpp
     lib/services/authService.cpp
     lib/version.cpp

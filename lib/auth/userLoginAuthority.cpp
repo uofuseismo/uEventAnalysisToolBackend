@@ -220,6 +220,23 @@ public:
             });
     }
 
+    /// @brief Records key use.
+    [[nodiscard]] bool recordKeyUse(const std::string &key)
+    {
+        constexpr std::string_view query{"SELECT auth.record_key_use($1)"};
+        const pqxx::params parameters{key};
+        return withTransaction<pqxx::work>(
+            [&](pqxx::work &transaction) -> bool
+            {
+                auto row = transaction.exec(query, parameters).one_row();
+                const auto success = row.at(0).as<bool> ();
+                // Without the commit the last_login update rolls back on
+                // the transaction's destruction.
+                transaction.commit();
+                return success;
+            });
+    } 
+
     /// @brief Gets the hashed password from the database.
     /// @result The hashed password (or null if the user does not exist).
     [[nodiscard]] std::optional<std::string> 
@@ -262,6 +279,25 @@ public:
             });
     }
 
+    // @result The key owner (user) name if the key is active (i.e., exists and
+    //         is not revoked or expired etc.) 
+    [[nodiscard]] std::optional<std::string> getUserByKey(const std::string &key)
+    {
+        if (key.empty())
+        {   
+            throw std::runtime_error("Key is empty");
+        }
+        constexpr std::string_view query{"SELECT auth.get_user_by_key($1)"};
+        const pqxx::params parameters{key};
+        return withTransaction<pqxx::read_transaction>(
+            [&](pqxx::read_transaction &transaction)->std::optional<std::string>
+            {
+                auto row = transaction.exec(query, parameters).one_row();
+                // Null indicates no user
+                if (row.at(0).is_null()){return std::nullopt;}
+                return row[0].as<std::string> (); 
+            });
+    }
 
     // Check the user's password
     [[nodiscard]] IAuthenticator::Result authenticateByUserNameAndPassword(

@@ -14,11 +14,13 @@
 #include "uEventAnalysisToolBackend/services/adminService.hpp"
 #include "uEventAnalysisToolBackend/auth/administratorLoginAuthority.hpp"
 #include "uEventAnalysisToolBackend/auth/administratorTokenVerifier.hpp"
+#include "uEventAnalysisToolBackend/auth/userAdministration.hpp"
 #include "uEventAnalysisToolBackend/auth/userTokenVerifier.hpp"
 #include "uEventAnalysisToolBackend/auth/authenticator.hpp"
 #include "uEventAnalysisToolBackend/grpc/requireBearer.hpp"
 //#include "uEventAnalysisToolBackend/grpc/parseAuthorizationHeader.hpp"
 #include "uEventAnalysisToolBackend/grpc/toRequestIdentifier.hpp"
+#include "uEventAnalysisToolBackend/grpc/unaryReactor.hpp"
 #include <uEventAnalysisToolAPI/admin/v1/service.grpc.pb.h>
 #include <uEventAnalysisToolAPI/admin/v1/create_user_request.pb.h>
 #include <uEventAnalysisToolAPI/admin/v1/create_user_response.pb.h>
@@ -85,6 +87,8 @@ public:
         mLoginAuthority{nullptr};
     std::shared_ptr<UAuth::AdministratorTokenVerifier>
         mAdministratorTokenVerifier{nullptr};
+    std::shared_ptr<UAuth::UserAdministration> 
+        mUserAdministration{nullptr};
     std::shared_ptr<UAuth::UserTokenVerifier>
         mUserTokenVerifier{nullptr};
     std::shared_ptr<spdlog::logger> mLogger{nullptr};
@@ -253,82 +257,77 @@ grpc::ServerUnaryReactor
     UEventAnalysisToolAPI::Admin::V1::CreateUserResponse *response)
 {
     namespace UAdminV1 = UEventAnalysisToolAPI::Admin::V1;
-    class Reactor : public grpc::ServerUnaryReactor
+    class Reactor final : public GRPC::UnaryReactor
     {
     public:
         Reactor(UAdminV1::CreateUserResponse *response,
                 grpc::CallbackServerContext *context,
                 const UAdminV1::CreateUserRequest &request,
-                UAuth::AdministratorLoginAuthority &loginAuthority,
-                const UAuth::AdministratorTokenVerifier &adminTokenVerifier,
-                std::shared_ptr<spdlog::logger> logger) :
-            mLogger(std::move(logger))
+                UAuth::UserAdministration &administration,
+                const UAuth::AdministratorTokenVerifier &verifier,
+                std::shared_ptr<spdlog::logger> loggerPtr) :
+            UnaryReactor(context,
+                         "Admin.V1.CreateUser",
+                         std::move(loggerPtr),
+                         verifier)
         {
-            auto requestIdentifier = GRPC::toRequestIdentifier(*context);
-            auto bearerResult = GRPC::requireBearer(*context, adminTokenVerifier);
-            if (!bearerResult.has_value())
+            if (!isAuthenticated()){return;}
+            run([&]() -> grpc::Status
             {
-                //metrics.incrementUnauthenticatedCounter(mRouteName);
-                SPDLOG_LOGGER_WARN(mLogger,
-                    "{} did not provide bearer authorization - rejected",
-                     requestIdentifier);
-                Finish(bearerResult.error());
-                return;
-            }
-
-            auto adminUser = bearerResult->getUser();
-
-            mSuccess = true;
-            SPDLOG_LOGGER_DEBUG(
-                mLogger,
-                "{} successfully logged in with password",
-                requestIdentifier);
-            Finish(grpc::Status::OK);
-        }
-
-    private:
-        void OnDone() override
-        {
-            if (mLogger)
-            {
-                SPDLOG_LOGGER_DEBUG(mLogger,
-                                    "{} RPC completed", mRouteName);
-            }
-            //auto &metrics = Metrics::Singleton::getInstance();
-            if (mSuccess)
-            {
-                //metrics.incrementSuccessCounter(mRouteName);
-                const auto endTime = std::chrono::steady_clock::now();
-                auto elapsedTime
-                    = std::chrono::duration<double>
-                      (endTime - mRPCStartTime);
-                //metrics.recordRouteDuration(elapsedTime, mRouteName);
-            }
-            delete this;
-        }
-
-        void OnCancel() override
-        {
-            if (mLogger)
-            {
-                SPDLOG_LOGGER_DEBUG(mLogger,
-                                    "{} RPC canceled", mRouteName);
-            }
-        }
-//private:
-        std::shared_ptr<spdlog::logger> mLogger{nullptr};
-        const std::chrono::time_point<std::chrono::steady_clock> mRPCStartTime
-        {
-            std::chrono::steady_clock::now()
-        };           
-        const std::string mRouteName{"CreateUser"};
-        bool mSuccess{false};
+                const auto &actor = getClaims()->getUser();
+                if (request.name().empty())
+                {
+                    return {grpc::StatusCode::INVALID_ARGUMENT,
+                            "User name is required"};
+                }
+                auto result
+                    = administration.createProvisionalUser(actor,
+                                                           request.name());
+                if (!result.has_value())
+                {
+/*
+                    if (result.error() ==
+                        UAuth::ReturnCode::AlreadyExists)
+                    {
+                        return {grpc::StatusCode::ALREADY_EXISTS,
+                                "User " + request.name() + " already exists"};
+                    }
+                    else if (result.error() ==
+                             UAuth::ReturnCode::NotAuthorized)
+                    {
+                        return {grpc::StatusCode::PERMISSION_DENIED,
+                                "Not an administrator"};
+                    }
+                    else if (result.error() ==
+                             UAuth::ReturnCode::InvalidArgument)
+                    { 
+                        return {grpc::StatusCode::INVALID_ARGUMENT,
+                                "Invalid user name"};
+                    }
+                    else if (result.error() ==
+                             UAuth::ReturnCode::ServerError)
+                    {
+                        return {grpc::StatusCode::INTERNAL,
+                                "Server error - contact maintainer"};
+                    }
+*/
+                    return {grpc::StatusCode::INTERNAL,
+                            "Server error - contact maintainer"};
+                }
+                SPDLOG_LOGGER_INFO(&logger(),
+                                   "{} created provisional user {}",
+                                   actor, request.name());
+//                response->set_user(request.name());
+                response->set_temporary_password(
+                    std::move(result->issuedPassword));
+                return grpc::Status::OK;
+            });
+        };
     };
-
     return new Reactor(response,
                        context,
                        *request,
-                       *pImpl->mLoginAuthority,
+                       *pImpl->mUserAdministration,
                        *pImpl->mAdministratorTokenVerifier,
                        pImpl->mLogger);
 }

@@ -149,7 +149,7 @@ UserLoginAuthorityOptions::getPasswordHasherOptions() const noexcept
     return pImpl->mPasswordHasherOptions;
 }
 
-/// Password poliy
+/// Password policy
 void UserLoginAuthorityOptions::setPasswordPolicy(
     const Password::PasswordPolicy &policy)
 {
@@ -161,7 +161,6 @@ UserLoginAuthorityOptions::getPasswordPolicy() const noexcept
 {
     return pImpl->mPasswordPolicy;
 }
-
 
 /// Key pair
 void UserLoginAuthorityOptions::setKeyPairAndAlgorithm(

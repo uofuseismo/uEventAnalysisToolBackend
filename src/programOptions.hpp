@@ -15,6 +15,7 @@
 #include "uEventAnalysisToolBackend/database/credentials.hpp"
 #include "uEventAnalysisToolBackend/auth/administratorLoginAuthorityOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/tokenVerifierOptions.hpp"
+#include "uEventAnalysisToolBackend/auth/userAdministrationOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/userLoginAuthorityOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
@@ -138,6 +139,10 @@ struct ProgramOptions
                  iniFile, "UserLoginAuthority",
                  applicationName + "-user-authority");
 
+        userAdminOptions.setDatabaseCredentials(
+            adminLoginAuthorityOptions.getDatabaseCredentials()); 
+        userAdminOptions.setPasswordPolicy(
+            userLoginAuthorityOptions.getPasswordPolicy());
 /*
         passwordHasherOptions
             = UEAT::Auth::Password::HasherOptions::fromInitializationFile(
@@ -153,6 +158,8 @@ struct ProgramOptions
     //UEventAnalysisToolBackend::Auth::JSONWebTokenOptions jwtOptions;
     UEventAnalysisToolBackend::Auth::AdministratorLoginAuthorityOptions
         adminLoginAuthorityOptions;
+    UEventAnalysisToolBackend::Auth::UserAdministrationOptions
+        userAdminOptions;
     //UEventAnalysisToolBackend::Database::Credentials adminLoginAuthorityDatabaseCredentials;
     UEventAnalysisToolBackend::Auth::UserLoginAuthorityOptions userLoginAuthorityOptions;
     //UEventAnalysisToolBackend::Database::Credentials userLoginAuthorityDatabaseCredentials;

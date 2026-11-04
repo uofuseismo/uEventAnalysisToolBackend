@@ -251,6 +251,7 @@ target_include_directories(uEventAnalysisToolBackend
                           )
 target_link_libraries(uEventAnalysisToolBackend
                       PRIVATE uEventAnalysisToolBackend::libuEventAnalysisToolBackend
+                              libsodium::libsodium
                               Boost::headers Boost::program_options)
 
 if (${WITH_CONAN})

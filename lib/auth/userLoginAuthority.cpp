@@ -472,7 +472,8 @@ UserLoginAuthority::loginWithPassword(
 /// Login with password and get a token
 std::expected<std::string, IAuthenticator::Result>
 UserLoginAuthority::loginWithKey(
-    const std::pair<std::string, std::string> &keyAndSignature) const
+    const std::pair<std::string, std::string> &keyAndSignature,
+    const std::string &signedMessageIn) const
 {
     if (!isInitialized())
     {
@@ -480,13 +481,34 @@ UserLoginAuthority::loginWithKey(
                             "UserLoginAuthority not initialized");
         return std::unexpected(IAuthenticator::Result::ServerError);
     }
-    if (keyAndSignature.first.empty())
+    if (keyAndSignature.first.size() != crypto_sign_PUBLICKEYBYTES)
     {
         SPDLOG_LOGGER_WARN(pImpl->mLogger,
-                         "Rejecting user login attempt because key is empty");
+                         "Rejecting user; key length is wrong size");
         return std::unexpected(IAuthenticator::Result::InvalidCredentials);
     }
-// TODO copy public key and check size
+    if (keyAndSignature.second.size() != crypto_sign_BYTES)
+    {
+        SPDLOG_LOGGER_WARN(pImpl->mLogger,
+                         "Rejecting user; signature is wrong size");
+        return std::unexpected(IAuthenticator::Result::InvalidCredentials);
+    }
+
+    if (signedMessageIn.empty())
+    {
+        SPDLOG_LOGGER_WARN(pImpl->mLogger,
+                           "Rejecting user because signed message is empty");
+        return std::unexpected(IAuthenticator::Result::InvalidCredentials);
+    }
+    unsigned char publicKey[crypto_sign_PUBLICKEYBYTES];
+    std::copy(keyAndSignature.first.begin(), keyAndSignature.first.end(),
+               publicKey);
+    unsigned char signature[crypto_sign_BYTES];
+    std::copy(keyAndSignature.second.begin(), keyAndSignature.second.end(),
+              signature);
+    std::vector<unsigned char> signedMessage(signedMessageIn.size());
+    std::copy(signedMessageIn.begin(), signedMessageIn.end(),
+              signedMessage.begin());    
     std::string user;
     try
     {
@@ -505,9 +527,7 @@ UserLoginAuthority::loginWithKey(
                            "Error getting user by key - {}", e.what());
         return std::unexpected(IAuthenticator::Result::ServerError);
     }
-    unsigned char signature[crypto_sign_BYTES];
-    unsigned char publicKey[crypto_sign_PUBLICKEYBYTES];
-    std::vector<unsigned char> signedMessage;
+    // Verify the signed message
     if (crypto_sign_verify_detached(signature,
                                     signedMessage.data(),
                                     signedMessage.size(),

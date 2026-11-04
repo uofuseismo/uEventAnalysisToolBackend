@@ -67,7 +67,8 @@ public:
     ///         not an admin token and cannot be used in administartor
     ///         routes.
     [[nodiscard]] std::expected<std::string, IAuthenticator::Result>
-        loginWithKey(const std::pair<std::string, std::string> &publicKeyAndSignature) const; 
+        loginWithKey(const std::pair<std::string, std::string> &publicKeyAndSignature,
+                     const std::string &signedMessage) const;
 
     /// @brief Checks a password without minting a token.  This is for
     ///        changing a password and changing a key which demand the

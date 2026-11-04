@@ -4,6 +4,8 @@ package UEventAnalysisToolAPI.Auth.V1;
 
 import "uEventAnalysisToolAPI/auth/v1/change_password_request.proto";
 import "uEventAnalysisToolAPI/auth/v1/change_password_response.proto";
+import "uEventAnalysisToolAPI/auth/v1/login_with_key_request.proto";
+import "uEventAnalysisToolAPI/auth/v1/login_with_key_response.proto";
 import "uEventAnalysisToolAPI/auth/v1/login_with_password_request.proto";
 import "uEventAnalysisToolAPI/auth/v1/login_with_password_response.proto";
 import "uEventAnalysisToolAPI/auth/v1/get_password_requirements_request.proto";
@@ -26,7 +28,7 @@ service AuthService {
    rpc GetPasswordRequirements(GetPasswordRequirementsRequest) returns(PasswordRequirements) {};
    // Log-in with a key.  In this case the client will pass their key via
    // the message payload. 
-   //rpc LoginWithKey(LoginWithKeyRequest) returns(LoginWithKeyResponse) {};
+   rpc LoginWithKey(LoginWithKeyRequest) returns(LoginWithKeyResponse) {};
    // Allows the user to add a key.
    //rpc AddKey(AddKeyRequest) returns(AddKeyResponse) {};
 }

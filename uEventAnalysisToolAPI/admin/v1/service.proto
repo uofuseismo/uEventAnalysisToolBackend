@@ -12,8 +12,14 @@ import "uEventAnalysisToolAPI/admin/v1/login_with_password_request.proto";
 import "uEventAnalysisToolAPI/admin/v1/login_with_password_response.proto";
 import "uEventAnalysisToolAPI/admin/v1/reset_password_request.proto";
 import "uEventAnalysisToolAPI/admin/v1/reset_password_response.proto";
+import "uEventAnalysisToolAPI/admin/v1/revoke_administrator_request.proto";
+import "uEventAnalysisToolAPI/admin/v1/revoke_administrator_response.proto";
+import "uEventAnalysisToolAPI/admin/v1/revoke_permission_request.proto";
+import "uEventAnalysisToolAPI/admin/v1/revoke_permission_response.proto";
 import "uEventAnalysisToolAPI/admin/v1/set_administrator_request.proto";
 import "uEventAnalysisToolAPI/admin/v1/set_administrator_response.proto";
+import "uEventAnalysisToolAPI/admin/v1/set_permission_request.proto";
+import "uEventAnalysisToolAPI/admin/v1/set_permission_response.proto";
 //import "uEventAnalysisToolAPI/v1/userSettings/add_key_request.proto";
 //import "uEventAnalysisToolAPI/v1/userSettings/add_key_response.proto";
 //import "uEventAnalysisToolAPI/v1/userSettings/list_keys_request.proto";
@@ -38,10 +44,10 @@ service AdminService {
    rpc ResetPassword(ResetPasswordRequest) returns(ResetPasswordResponse) {}; 
    // Sets a user as an administrator.
    rpc SetAdministrator(SetAdministratorRequest) returns(SetAdministratorResponse) {};
-/*
+   // Revokes a user's administrator privileges.
+   rpc RevokeAdministrator(RevokeAdministratorRequest) returns(RevokeAdministratorResponse) {};
    // Sets a user's permissions.
    rpc SetPermission(SetPermissionRequest) returns(SetPermissionResponse) {};
    // Revoke's a user's permissions.
    rpc RevokePermission(RevokePermissionRequest) returns(RevokePermissionResponse) {};
-*/
 }

@@ -1,0 +1,12 @@
+edition = "2023";
+
+package UEventAnalysisToolAPI.Admin.V1;
+
+/**
+ * Requests a user's administrator privileges be revoked.
+ */
+message RevokeAdministratorRequest {
+   /// The name of the user whose administrative privileges to revoke.
+   string name = 1;
+}
+

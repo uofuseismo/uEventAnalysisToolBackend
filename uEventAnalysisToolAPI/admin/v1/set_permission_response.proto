@@ -1,0 +1,11 @@
+edition = "2023";
+
+package UEventAnalysisToolAPI.Admin.V1;
+
+/**
+ * Response to a user's permissions adjustment in a schema.
+ */
+message SetPermissionsResponse {
+   /// Supplemental information related to the request.
+   string details = 1 [default = ""];
+}

@@ -1,0 +1,11 @@
+edition = "2023";
+
+package UEventAnalysisToolAPI.Admin.V1;
+
+/**
+ * Response to a request to revoke a user's permissions in a schema.
+ */
+message RevokePermissionsResponse {
+   /// Supplemental information related to the request.
+   string details = 1 [default = ""];
+}

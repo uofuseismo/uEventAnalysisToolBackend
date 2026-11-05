@@ -3,6 +3,7 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <utility>
 #include <spdlog/spdlog.h>
 #include <spdlog/logger.h>
@@ -30,6 +31,53 @@
 using namespace UEventAnalysisToolBackend::Services;
 
 namespace UAuth = UEventAnalysisToolBackend::Auth;
+
+namespace
+{
+grpc::Status enumToStatus(const UAuth::UserAdministration::ReturnCode code,
+                          const std::string &userName)
+{
+    if (code ==
+        UAuth::UserAdministration::ReturnCode::AlreadyExists)
+    {
+        return {grpc::StatusCode::ALREADY_EXISTS,
+                "User " + userName + " already exists"};
+    }
+    else if (code ==
+             UAuth::UserAdministration::ReturnCode::NotAuthorized)
+    {
+        return {grpc::StatusCode::PERMISSION_DENIED,
+                "Not an administrator"};
+    }
+    else if (code ==
+             UAuth::UserAdministration::ReturnCode::NoSchema)
+    {
+        return {grpc::StatusCode::INVALID_ARGUMENT,
+                "Schema does not exist"};
+    }   
+    else if (code ==
+             UAuth::UserAdministration::ReturnCode::InvalidArgument)
+    { 
+        return {grpc::StatusCode::INVALID_ARGUMENT,
+                "Invalid user name or schema"};
+    }
+    else if (code ==
+             UAuth::UserAdministration::ReturnCode::LastAdministrator)
+    {       
+        return {grpc::StatusCode::INVALID_ARGUMENT,
+                "Refused - action would leave no administrators"};
+    }
+    else if (code ==
+             UAuth::UserAdministration::ReturnCode::ServerError)
+    {
+        return {grpc::StatusCode::INTERNAL,
+                "Server error - contact maintainer"};
+    }
+    return {grpc::StatusCode::INTERNAL,
+            "Unhandled status code - server error - contact maintainer"};
+}
+}
+
 
 class AdminService::AdminServiceImpl
 {
@@ -285,39 +333,13 @@ grpc::ServerUnaryReactor
                                                            request.name());
                 if (!result.has_value())
                 {
-/*
-                    if (result.error() ==
-                        UAuth::ReturnCode::AlreadyExists)
-                    {
-                        return {grpc::StatusCode::ALREADY_EXISTS,
-                                "User " + request.name() + " already exists"};
-                    }
-                    else if (result.error() ==
-                             UAuth::ReturnCode::NotAuthorized)
-                    {
-                        return {grpc::StatusCode::PERMISSION_DENIED,
-                                "Not an administrator"};
-                    }
-                    else if (result.error() ==
-                             UAuth::ReturnCode::InvalidArgument)
-                    { 
-                        return {grpc::StatusCode::INVALID_ARGUMENT,
-                                "Invalid user name"};
-                    }
-                    else if (result.error() ==
-                             UAuth::ReturnCode::ServerError)
-                    {
-                        return {grpc::StatusCode::INTERNAL,
-                                "Server error - contact maintainer"};
-                    }
-*/
-                    return {grpc::StatusCode::INTERNAL,
-                            "Server error - contact maintainer"};
+                    return enumToStatus(result.error(), request.name());
                 }
                 SPDLOG_LOGGER_INFO(&logger(),
                                    "{} created provisional user {}",
                                    actor, request.name());
-//                response->set_user(request.name());
+                response->set_user(
+                    std::move(result->user));
                 response->set_temporary_password(
                     std::move(result->issuedPassword));
                 return grpc::Status::OK;
@@ -331,6 +353,59 @@ grpc::ServerUnaryReactor
                        *pImpl->mAdministratorTokenVerifier,
                        pImpl->mLogger);
 }
+
+///------------------------------Delete User---------------------------------///
+grpc::ServerUnaryReactor
+*AdminService::DeleteUser(
+    grpc::CallbackServerContext *context,
+    const UEventAnalysisToolAPI::Admin::V1::DeleteUserRequest *request,
+    UEventAnalysisToolAPI::Admin::V1::DeleteUserResponse *response)
+{
+    namespace UAdminV1 = UEventAnalysisToolAPI::Admin::V1;
+    class Reactor final : public GRPC::UnaryReactor
+    {   
+    public:
+        Reactor(UAdminV1::DeleteUserResponse *response,
+                grpc::CallbackServerContext *context,
+                const UAdminV1::DeleteUserRequest &request,
+                UAuth::UserAdministration &administration,
+                const UAuth::AdministratorTokenVerifier &verifier,
+                std::shared_ptr<spdlog::logger> loggerPtr) :
+            UnaryReactor(context,
+                         "Admin.V1.DeleteUser",
+                         std::move(loggerPtr),
+                         verifier)
+        {
+            if (!isAuthenticated()){return;}
+            run([&]() -> grpc::Status
+            {
+                const auto &actor = getClaims()->getUser();
+                if (request.name().empty())
+                {
+                    return {grpc::StatusCode::INVALID_ARGUMENT,
+                            "User name is required"};
+                }
+                auto result
+                    = administration.deleteUser(actor, request.name());
+                if (result != UAuth::UserAdministration::ReturnCode::Success)
+                {
+                    return enumToStatus(result, request.name());
+                }
+                SPDLOG_LOGGER_INFO(&logger(),
+                                   "{} deleted user {}",
+                                   actor, request.name());
+                return grpc::Status::OK;
+            });
+        };
+    };
+    return new Reactor(response,
+                       context,
+                       *request,
+                       *pImpl->mUserAdministration,
+                       *pImpl->mAdministratorTokenVerifier,
+                       pImpl->mLogger);
+}
+
 
 /// Destructor
 AdminService::~AdminService() = default;

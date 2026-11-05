@@ -10,6 +10,8 @@ namespace UEventAnalysisToolAPI::Admin::V1
 {
  class CreateUserRequest;
  class CreateUserResponse;
+ class DeleteUserRequest;
+ class DeleteUserResponse;
  class LoginWithPasswordRequest;
  class LoginWithPasswordResponse;
 }
@@ -57,6 +59,11 @@ public:
             const UEventAnalysisToolAPI::Admin::V1::CreateUserRequest *request,
             UEventAnalysisToolAPI::Admin::V1::CreateUserResponse *response) override;
 
+    grpc::ServerUnaryReactor
+        *DeleteUser(
+            grpc::CallbackServerContext *context,
+            const UEventAnalysisToolAPI::Admin::V1::DeleteUserRequest *request,
+            UEventAnalysisToolAPI::Admin::V1::DeleteUserResponse *response) override;
 
     virtual ~AdminService();
 

@@ -282,7 +282,7 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::UserAdministration",
                 = administration.createProvisionalUser(bad, newcomer);
             REQUIRE_FALSE(refused.has_value());
             REQUIRE(refused.error() == ReturnCode::InvalidArgument);
-            REQUIRE(administration.removeUser(bad, user)
+            REQUIRE(administration.deleteUser(bad, user)
                     == ReturnCode::InvalidArgument);
         }
         REQUIRE_FALSE(seeder.exists(newcomer));
@@ -303,7 +303,7 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::UserAdministration",
             const auto reset = administration.resetPassword(actor, user, false);
             REQUIRE_FALSE(reset.has_value());
             REQUIRE(reset.error() == ReturnCode::NotAuthorized);
-            REQUIRE(administration.removeUser(actor, user)
+            REQUIRE(administration.deleteUser(actor, user)
                     == ReturnCode::NotAuthorized);
             REQUIRE(administration.setPermission(actor, user, "ynp",
                                                  Permission::ReadWrite)
@@ -417,7 +417,7 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::UserAdministration",
     }
     SECTION("A removed user is gone")
     {
-        REQUIRE(administration.removeUser(administrator, toUpper(user))
+        REQUIRE(administration.deleteUser(administrator, toUpper(user))
                 == ReturnCode::Success);
         REQUIRE_FALSE(seeder.exists(user));
         const auto token
@@ -425,7 +425,7 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::UserAdministration",
         REQUIRE_FALSE(token.has_value());
         REQUIRE(token.error() == Result::InvalidCredentials);
 
-        REQUIRE(administration.removeUser(administrator, user)
+        REQUIRE(administration.deleteUser(administrator, user)
                 == ReturnCode::NoUserFound);
     }
     SECTION("A reset issues a new password and kills the old one")
@@ -481,7 +481,7 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::UserAdministration",
             SKIP("Another administrator exists, so "
                  << administrator << " is not the last one");
         }
-        REQUIRE(administration.removeUser(administrator, administrator)
+        REQUIRE(administration.deleteUser(administrator, administrator)
                 == ReturnCode::LastAdministrator);
         REQUIRE(administration.revokeAdministrator(administrator,
                                                    administrator)

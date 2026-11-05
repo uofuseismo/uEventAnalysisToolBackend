@@ -58,7 +58,7 @@ public:
     [[nodiscard]] std::expected<IssuedPassword, ReturnCode> createProvisionalUser(const std::string &actor, const std::string &user);
 
     /// @brief Removes a user.
-    [[nodiscard]] ReturnCode removeUser(const std::string &actor, const std::string &user);
+    [[nodiscard]] ReturnCode deleteUser(const std::string &actor, const std::string &user);
 
     /// @brief Resets a user's password.
     [[nodiscard]] std::expected<IssuedPassword, ReturnCode> resetPassword(const std::string &actor, const std::string &user, bool removeKeys);

@@ -246,7 +246,7 @@ public:
     //NOLINTBEGIN(bugprone-easily-swappable-parameters)
     [[nodiscard]]
     std::expected<bool, ReturnCode> 
-        removeUser(const std::string &actor, const std::string &name)
+        deleteUser(const std::string &actor, const std::string &name)
     //NOLINTEND(bugprone-easily-swappable-parameters)
     {   
         constexpr std::string_view query
@@ -545,7 +545,7 @@ UserAdministration::resetPassword(const std::string &actorIn,
 
 /// Remove a user
 UserAdministration::ReturnCode
-UserAdministration::removeUser(const std::string &actorIn,
+UserAdministration::deleteUser(const std::string &actorIn,
                                const std::string &nameIn)
 {
     if (!isInitialized())
@@ -571,7 +571,7 @@ UserAdministration::removeUser(const std::string &actorIn,
 
     try
     {
-        auto result = pImpl->removeUser(actor, name);
+        auto result = pImpl->deleteUser(actor, name);
         if (result.has_value())
         {
             if (*result)

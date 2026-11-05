@@ -156,6 +156,7 @@ set(PROTO_SRC
     uEventAnalysisToolAPI/admin/v1/list_users_response.proto
     uEventAnalysisToolAPI/admin/v1/login_with_password_request.proto
     uEventAnalysisToolAPI/admin/v1/login_with_password_response.proto
+    uEventAnalysisToolAPI/admin/v1/permission.proto
     uEventAnalysisToolAPI/admin/v1/reset_password_request.proto
     uEventAnalysisToolAPI/admin/v1/reset_password_response.proto
     uEventAnalysisToolAPI/admin/v1/revoke_administrator_request.proto
@@ -175,7 +176,6 @@ set(PROTO_SRC
     uEventAnalysisToolAPI/auth/v1/login_with_password_response.proto
     uEventAnalysisToolAPI/auth/v1/get_password_requirements_request.proto
     uEventAnalysisToolAPI/auth/v1/password_requirements.proto
-    uEventAnalysisToolAPI/auth/v1/permission.proto
     uEventAnalysisToolAPI/auth/v1/service.proto
     uEventAnalysisToolAPI/settings/v1/get_map_provider_request.proto
     uEventAnalysisToolAPI/settings/v1/map_provider.proto

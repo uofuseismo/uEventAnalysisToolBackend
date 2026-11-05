@@ -27,8 +27,11 @@
 #include <uEventAnalysisToolAPI/admin/v1/create_user_response.pb.h>
 #include <uEventAnalysisToolAPI/admin/v1/delete_user_request.pb.h>
 #include <uEventAnalysisToolAPI/admin/v1/delete_user_response.pb.h>
+//#include <uEventAnalysisToolAPI/admin/v1/list_users_request.pb.h>
+//#include <uEventAnalysisToolAPI/admin/v1/list_users_response.pb.h>
 #include <uEventAnalysisToolAPI/admin/v1/login_with_password_request.pb.h>
 #include <uEventAnalysisToolAPI/admin/v1/login_with_password_response.pb.h>
+#include <uEventAnalysisToolAPI/admin/v1/permission.pb.h>
 #include <uEventAnalysisToolAPI/admin/v1/revoke_administrator_request.pb.h>
 #include <uEventAnalysisToolAPI/admin/v1/revoke_administrator_response.pb.h>
 #include <uEventAnalysisToolAPI/admin/v1/revoke_permission_request.pb.h>
@@ -613,15 +616,13 @@ grpc::ServerUnaryReactor
                 }
                 UAuth::UserAdministration::Permission desiredPermission;
                 if (request.permission() ==
-                    UAdminV1::SetPermissionRequest_Permission::
-                    SetPermissionRequest_Permission_PERMISSION_READ_ONLY)
+                    UAdminV1::Permission::PERMISSION_READ_ONLY)
                 {
                     desiredPermission
                         = UAuth::UserAdministration::Permission::ReadOnly;
                 }
                 else if (request.permission() ==
-                         UAdminV1::SetPermissionRequest_Permission::
-                         SetPermissionRequest_Permission_PERMISSION_READ_WRITE)
+                         UAdminV1::Permission::PERMISSION_READ_WRITE)
                 {
                     desiredPermission
                         = UAuth::UserAdministration::Permission::ReadWrite;

@@ -1,0 +1,12 @@
+edition = "2023";
+
+package UEventAnalysisToolAPI.Admin.V1;
+
+/**
+ * Requests a user be given administrator privileges.
+ */
+message SetAdministratorRequest {
+   /// The name of the user to elevate.
+   string name = 1;
+}
+

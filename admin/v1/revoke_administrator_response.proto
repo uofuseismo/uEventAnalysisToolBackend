@@ -1,0 +1,11 @@
+edition = "2023";
+
+package UEventAnalysisToolAPI.Admin.V1;
+
+/**
+ * Response to revoking a user's adminsrator's privileges.
+ */
+message RevokeAdministratorResponse {
+   /// Supplemental information related to the request.
+   string details = 1 [default = ""];
+}

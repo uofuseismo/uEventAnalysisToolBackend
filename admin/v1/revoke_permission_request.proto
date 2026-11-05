@@ -1,0 +1,14 @@
+edition = "2023";
+
+package UEventAnalysisToolAPI.Admin.V1;
+
+/**
+ * Request to revoke a user's permissions in a schema.  This
+ * effectively evicts the user from the schema. 
+ */
+message RevokePermissionsRequest {
+   /// The name of the user whose permissions will be revoked.
+   string name = 1;
+   /// The schema.
+   string schema = 2;
+}

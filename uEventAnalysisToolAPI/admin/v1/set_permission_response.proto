@@ -5,7 +5,7 @@ package UEventAnalysisToolAPI.Admin.V1;
 /**
  * Response to a user's permissions adjustment in a schema.
  */
-message SetPermissionsResponse {
+message SetPermissionResponse {
    /// Supplemental information related to the request.
    string details = 1 [default = ""];
 }

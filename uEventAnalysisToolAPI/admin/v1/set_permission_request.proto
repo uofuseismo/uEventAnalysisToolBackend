@@ -5,7 +5,7 @@ package UEventAnalysisToolAPI.Admin.V1;
 /**
  * Request to set/adjust a user's permissions in a schema.
  */
-message SetPermissionsRequest {
+message SetPermissionRequest {
    /// The permission to grant to the user in the schema.
    enum Permission {
       /// No permissions specified - this result in an error.

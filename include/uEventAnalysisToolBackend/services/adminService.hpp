@@ -14,6 +14,14 @@ namespace UEventAnalysisToolAPI::Admin::V1
  class DeleteUserResponse;
  class LoginWithPasswordRequest;
  class LoginWithPasswordResponse;
+ class SetAdministratorRequest;
+ class SetAdministratorResponse;
+ class SetPermissionRequest;
+ class SetPermissionResponse;
+ class RevokeAdministratorRequest;
+ class RevokeAdministratorResponse;
+ class RevokePermissionRequest;
+ class RevokePermissionResponse;
 }
 
 namespace UEventAnalysisToolBackend::Auth
@@ -64,6 +72,30 @@ public:
             grpc::CallbackServerContext *context,
             const UEventAnalysisToolAPI::Admin::V1::DeleteUserRequest *request,
             UEventAnalysisToolAPI::Admin::V1::DeleteUserResponse *response) override;
+
+    grpc::ServerUnaryReactor
+        *SetPermission(
+            grpc::CallbackServerContext *context,
+            const UEventAnalysisToolAPI::Admin::V1::SetPermissionRequest *request,
+            UEventAnalysisToolAPI::Admin::V1::SetPermissionResponse *response) override;
+
+    grpc::ServerUnaryReactor
+        *RevokePermission(
+            grpc::CallbackServerContext *context,
+            const UEventAnalysisToolAPI::Admin::V1::RevokePermissionRequest *request,
+            UEventAnalysisToolAPI::Admin::V1::RevokePermissionResponse *response) override;
+
+    grpc::ServerUnaryReactor
+        *SetAdministrator(
+            grpc::CallbackServerContext *context,
+            const UEventAnalysisToolAPI::Admin::V1::SetAdministratorRequest *request,
+            UEventAnalysisToolAPI::Admin::V1::SetAdministratorResponse *response) override;
+
+    grpc::ServerUnaryReactor
+        *RevokeAdministrator(
+            grpc::CallbackServerContext *context,
+            const UEventAnalysisToolAPI::Admin::V1::RevokeAdministratorRequest *request,
+            UEventAnalysisToolAPI::Admin::V1::RevokeAdministratorResponse *response) override;
 
     virtual ~AdminService();
 

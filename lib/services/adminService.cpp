@@ -22,11 +22,22 @@
 //#include "uEventAnalysisToolBackend/grpc/parseAuthorizationHeader.hpp"
 #include "uEventAnalysisToolBackend/grpc/toRequestIdentifier.hpp"
 #include "uEventAnalysisToolBackend/grpc/unaryReactor.hpp"
-#include <uEventAnalysisToolAPI/admin/v1/service.grpc.pb.h>
+//#include <uEventAnalysisToolAPI/admin/v1/service.grpc.pb.h>
 #include <uEventAnalysisToolAPI/admin/v1/create_user_request.pb.h>
 #include <uEventAnalysisToolAPI/admin/v1/create_user_response.pb.h>
+#include <uEventAnalysisToolAPI/admin/v1/delete_user_request.pb.h>
+#include <uEventAnalysisToolAPI/admin/v1/delete_user_response.pb.h>
 #include <uEventAnalysisToolAPI/admin/v1/login_with_password_request.pb.h>
 #include <uEventAnalysisToolAPI/admin/v1/login_with_password_response.pb.h>
+#include <uEventAnalysisToolAPI/admin/v1/revoke_administrator_request.pb.h>
+#include <uEventAnalysisToolAPI/admin/v1/revoke_administrator_response.pb.h>
+#include <uEventAnalysisToolAPI/admin/v1/revoke_permission_request.pb.h>
+#include <uEventAnalysisToolAPI/admin/v1/revoke_permission_response.pb.h>
+#include <uEventAnalysisToolAPI/admin/v1/set_administrator_request.pb.h>
+#include <uEventAnalysisToolAPI/admin/v1/set_administrator_response.pb.h>
+#include <uEventAnalysisToolAPI/admin/v1/set_permission_request.pb.h>
+#include <uEventAnalysisToolAPI/admin/v1/set_permission_response.pb.h>
+
 
 using namespace UEventAnalysisToolBackend::Services;
 
@@ -394,6 +405,245 @@ grpc::ServerUnaryReactor
                 SPDLOG_LOGGER_INFO(&logger(),
                                    "{} deleted user {}",
                                    actor, request.name());
+                return grpc::Status::OK;
+            });
+        };
+    };
+    return new Reactor(response,
+                       context,
+                       *request,
+                       *pImpl->mUserAdministration,
+                       *pImpl->mAdministratorTokenVerifier,
+                       pImpl->mLogger);
+}
+
+///------------------------------Revoke Admin---------------------------------///
+grpc::ServerUnaryReactor
+*AdminService::RevokeAdministrator(
+    grpc::CallbackServerContext *context,
+    const UEventAnalysisToolAPI::Admin::V1::RevokeAdministratorRequest *request,
+    UEventAnalysisToolAPI::Admin::V1::RevokeAdministratorResponse *response)
+{
+    namespace UAdminV1 = UEventAnalysisToolAPI::Admin::V1;
+    class Reactor final : public GRPC::UnaryReactor
+    {
+    public:
+        Reactor(UAdminV1::RevokeAdministratorResponse *response,
+                grpc::CallbackServerContext *context,
+                const UAdminV1::RevokeAdministratorRequest &request,
+                UAuth::UserAdministration &administration,
+                const UAuth::AdministratorTokenVerifier &verifier,
+                std::shared_ptr<spdlog::logger> loggerPtr) :
+            UnaryReactor(context,
+                         "Admin.V1.RevokeAdministrator",
+                         std::move(loggerPtr),
+                         verifier)
+        {
+            if (!isAuthenticated()){return;}
+            run([&]() -> grpc::Status
+            {
+                const auto &actor = getClaims()->getUser();
+                if (request.name().empty())
+                { 
+                    return {grpc::StatusCode::INVALID_ARGUMENT,
+                            "User name is required"};
+                }
+                auto result
+                    = administration.revokeAdministrator(actor, request.name());
+                if (result != UAuth::UserAdministration::ReturnCode::Success)
+                {
+                    return enumToStatus(result, request.name());
+                }
+                SPDLOG_LOGGER_INFO(&logger(),
+                                   "{} revoked user's {} admin privileges",
+                                   actor, request.name());
+                return grpc::Status::OK;
+            });
+        };
+    };
+    return new Reactor(response,
+                       context,
+                       *request,
+                       *pImpl->mUserAdministration,
+                       *pImpl->mAdministratorTokenVerifier,
+                       pImpl->mLogger);
+}
+
+///------------------------------Set Admin-----------------------------------///
+grpc::ServerUnaryReactor
+*AdminService::SetAdministrator(
+    grpc::CallbackServerContext *context,
+    const UEventAnalysisToolAPI::Admin::V1::SetAdministratorRequest *request,
+    UEventAnalysisToolAPI::Admin::V1::SetAdministratorResponse *response)
+{
+    namespace UAdminV1 = UEventAnalysisToolAPI::Admin::V1;
+    class Reactor final : public GRPC::UnaryReactor
+    {
+    public:
+        Reactor(UAdminV1::SetAdministratorResponse *response,
+                grpc::CallbackServerContext *context,
+                const UAdminV1::SetAdministratorRequest &request,
+                UAuth::UserAdministration &administration,
+                const UAuth::AdministratorTokenVerifier &verifier,
+                std::shared_ptr<spdlog::logger> loggerPtr) :
+            UnaryReactor(context,
+                         "Admin.V1.SetAdministrator",
+                         std::move(loggerPtr),
+                         verifier)
+        {
+            if (!isAuthenticated()){return;}
+            run([&]() -> grpc::Status
+            {
+                const auto &actor = getClaims()->getUser();
+                if (request.name().empty())
+                {
+                    return {grpc::StatusCode::INVALID_ARGUMENT,
+                            "User name is required"};
+                }
+                auto result
+                    = administration.setAdministrator(actor, request.name());
+                if (result != UAuth::UserAdministration::ReturnCode::Success)
+                {
+                    return enumToStatus(result, request.name());
+                }
+                SPDLOG_LOGGER_INFO(&logger(),
+                                   "{} granted user {} admin privileges",
+                                   actor, request.name());
+                return grpc::Status::OK;
+            });
+        };
+    };
+    return new Reactor(response,
+                       context,
+                       *request,
+                       *pImpl->mUserAdministration,
+                       *pImpl->mAdministratorTokenVerifier,
+                       pImpl->mLogger);
+}
+
+///------------------------------Revoke Permission---------------------------///
+grpc::ServerUnaryReactor
+*AdminService::RevokePermission(
+    grpc::CallbackServerContext *context,
+    const UEventAnalysisToolAPI::Admin::V1::RevokePermissionRequest *request,
+    UEventAnalysisToolAPI::Admin::V1::RevokePermissionResponse *response)
+{
+    namespace UAdminV1 = UEventAnalysisToolAPI::Admin::V1;
+    class Reactor final : public GRPC::UnaryReactor
+    {
+    public:
+        Reactor(UAdminV1::RevokePermissionResponse *response,
+                grpc::CallbackServerContext *context,
+                const UAdminV1::RevokePermissionRequest &request,
+                UAuth::UserAdministration &administration,
+                const UAuth::AdministratorTokenVerifier &verifier,
+                std::shared_ptr<spdlog::logger> loggerPtr) :
+            UnaryReactor(context,
+                         "Admin.V1.RevokePermission",
+                         std::move(loggerPtr),
+                         verifier)
+        {
+            if (!isAuthenticated()){return;}
+            run([&]() -> grpc::Status
+            {
+                const auto &actor = getClaims()->getUser();
+                if (request.name().empty())
+                {
+                    return {grpc::StatusCode::INVALID_ARGUMENT,
+                            "User name is required"};
+                }
+                auto result
+                    = administration.revokePermission(actor,
+                                                      request.name(),
+                                                      request.schema());
+                if (result != UAuth::UserAdministration::ReturnCode::Success)
+                {
+                    return enumToStatus(result, request.name());
+                }
+                SPDLOG_LOGGER_INFO(&logger(),
+                                   "{} revoked user {} permissions from {}",
+                                   actor, request.name(), request.schema());
+                return grpc::Status::OK;
+            });
+        };
+    };
+    return new Reactor(response,
+                       context,
+                       *request,
+                       *pImpl->mUserAdministration,
+                       *pImpl->mAdministratorTokenVerifier,
+                       pImpl->mLogger);
+}
+
+///------------------------------Set Permission------------------------------///
+grpc::ServerUnaryReactor
+*AdminService::SetPermission(
+    grpc::CallbackServerContext *context,
+    const UEventAnalysisToolAPI::Admin::V1::SetPermissionRequest *request,
+    UEventAnalysisToolAPI::Admin::V1::SetPermissionResponse *response)
+{
+    namespace UAdminV1 = UEventAnalysisToolAPI::Admin::V1;
+    class Reactor final : public GRPC::UnaryReactor
+    {
+    public:
+        Reactor(UAdminV1::SetPermissionResponse *response,
+                grpc::CallbackServerContext *context,
+                const UAdminV1::SetPermissionRequest &request,
+                UAuth::UserAdministration &administration,
+                const UAuth::AdministratorTokenVerifier &verifier,
+                std::shared_ptr<spdlog::logger> loggerPtr) :
+            UnaryReactor(context,
+                         "Admin.V1.SetPermission",
+                         std::move(loggerPtr),
+                         verifier)
+        {
+            if (!isAuthenticated()){return;}
+            run([&]() -> grpc::Status
+            {
+                const auto &actor = getClaims()->getUser();
+                if (request.name().empty())
+                {
+                    return {grpc::StatusCode::INVALID_ARGUMENT,
+                            "User name is required"};
+                }
+                if (request.schema().empty())
+                {
+                    return {grpc::StatusCode::INVALID_ARGUMENT,
+                            "Schema is required"};
+                }
+                UAuth::UserAdministration::Permission desiredPermission;
+                if (request.permission() ==
+                    UAdminV1::SetPermissionRequest_Permission::
+                    SetPermissionRequest_Permission_PERMISSION_READ_ONLY)
+                {
+                    desiredPermission
+                        = UAuth::UserAdministration::Permission::ReadOnly;
+                }
+                else if (request.permission() ==
+                         UAdminV1::SetPermissionRequest_Permission::
+                         SetPermissionRequest_Permission_PERMISSION_READ_WRITE)
+                {
+                    desiredPermission
+                        = UAuth::UserAdministration::Permission::ReadWrite;
+                }
+                else
+                {
+                    return {grpc::StatusCode::INVALID_ARGUMENT,
+                        "Requested permission must be read-only or read-write"};
+                }
+
+                auto result
+                    = administration.setPermission(actor,
+                                                   request.name(),
+                                                   request.schema(),
+                                                   desiredPermission);
+                if (result != UAuth::UserAdministration::ReturnCode::Success)
+                {
+                    return enumToStatus(result, request.name());
+                }
+                SPDLOG_LOGGER_INFO(&logger(),
+                                   "{} granted user {} privileges to {}",
+                                   actor, request.name(), request.schema());
                 return grpc::Status::OK;
             });
         };

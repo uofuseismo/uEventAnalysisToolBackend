@@ -16,6 +16,7 @@
 #include "uEventAnalysisToolBackend/auth/administratorLoginAuthority.hpp"
 #include "uEventAnalysisToolBackend/auth/administratorTokenVerifier.hpp"
 #include "uEventAnalysisToolBackend/auth/userAdministration.hpp"
+#include "uEventAnalysisToolBackend/auth/userList.hpp"
 #include "uEventAnalysisToolBackend/auth/userTokenVerifier.hpp"
 #include "uEventAnalysisToolBackend/auth/authenticator.hpp"
 #include "uEventAnalysisToolBackend/grpc/requireBearer.hpp"

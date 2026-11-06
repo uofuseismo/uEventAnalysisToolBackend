@@ -74,6 +74,7 @@ set(HEADER_FILES
     include/uEventAnalysisToolBackend/auth/authenticator.hpp
     include/uEventAnalysisToolBackend/auth/userAdministration.hpp
     include/uEventAnalysisToolBackend/auth/userAdministrationOptions.hpp
+    include/uEventAnalysisToolBackend/auth/userList.hpp
     include/uEventAnalysisToolBackend/auth/userLoginAuthority.hpp
     include/uEventAnalysisToolBackend/auth/userLoginAuthorityOptions.hpp
     include/uEventAnalysisToolBackend/auth/password/hasher.hpp
@@ -112,6 +113,7 @@ set(LIBRARY_SRC
     lib/auth/authenticator.cpp
     lib/auth/userAdministration.cpp
     lib/auth/userAdministrationOptions.cpp
+    lib/auth/userList.cpp
     lib/auth/userLoginAuthority.cpp
     lib/auth/userLoginAuthorityOptions.cpp
     lib/auth/userTokenVerifier.cpp

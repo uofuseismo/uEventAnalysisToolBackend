@@ -24,7 +24,7 @@ message ListUsersResponse {
    }
 
    // A key the user may log in with, unless it has expired.
-   message Key {
+   message ActiveKey {
       // The user's label for the key, e.g., laptop.  Unique per user.
       string name = 1;
       // The signature algorithm, e.g., ed25519.

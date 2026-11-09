@@ -128,6 +128,10 @@ public:
     /// @result The time when the key was last used.
     [[nodiscard]] std::optional<std::chrono::microseconds> getLastUsed() const noexcept;
 
+    /// @brief Converts this class to a message.
+    /// @note This is defined for UEventAnalysisToolAPI::Admin::V1::ListUsersResponse::ActiveKey.
+    template<typename U> [[nodiscard]] U toMessage() const;
+
     /// @brief Copy assignment.
     ActiveKey& operator=(const ActiveKey &key);
     /// @brief Move assignment.
@@ -219,6 +223,10 @@ public:
     /// @result The time when the key was last used.
     [[nodiscard]] std::optional<std::chrono::microseconds> getLastUsed() const noexcept;
 
+    /// @brief Converts this class to a message.
+    /// @note This is defined for UEventAnalysisToolAPI::Admin::V1::ListUsersResponse::InactiveKey.
+    template<typename U> [[nodiscard]] U toMessage() const;
+
     /// @brief Copy assignment.
     InactiveKey& operator=(const InactiveKey &key);
     /// @brief Move assignment.
@@ -291,6 +299,10 @@ public:
     void setInactiveKeys(std::vector<InactiveKey> &&inactiveKeys); 
     /// @result The inactive keys.
     [[nodiscard]] std::vector<InactiveKey> getInactiveKeys() const noexcept;
+
+    /// @brief Converts this class to a message.
+    /// @note This is defined for UEventAnalysisToolAPI::Admin::V1::ListUsersResponse::ActiveUser.
+    template<typename U> [[nodiscard]] U toMessage() const;
 
     /// @brief Copy assignment.
     ActiveUser& operator=(const ActiveUser &user);

@@ -5,9 +5,13 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <google/protobuf/util/time_util.h>
 #include "uEventAnalysisToolBackend/auth/userList.hpp"
+#include <uEventAnalysisToolAPI/admin/v1/list_users_response.pb.h>
+#include <uEventAnalysisToolAPI/admin/v1/permission.pb.h>
 
 using namespace UEventAnalysisToolBackend::Auth;
+namespace UEATAPIV1 = UEventAnalysisToolAPI::Admin::V1;
 
 ///-------------------------------Schema Permission--------------------------///
  
@@ -113,6 +117,31 @@ std::chrono::microseconds SchemaPermission::getWhenGranted() const
 bool SchemaPermission::hasWhenGranted() const noexcept
 {
     return pImpl->mHasWhenGranted;
+}
+
+template<>
+UEATAPIV1::ListUsersResponse::SchemaPermission
+SchemaPermission::toMessage() const
+{
+    UEATAPIV1::ListUsersResponse::SchemaPermission result;
+    result.set_schema(getSchema());
+    *result.mutable_granted()
+        = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
+             getWhenGranted().count());
+    auto permission = getPermission();
+    if (permission == SchemaPermission::Permission::ReadOnly)
+    {
+        result.set_permission(UEATAPIV1::PERMISSION_READ_ONLY);
+    }
+    else if (permission == SchemaPermission::Permission::ReadWrite)
+    {
+        result.set_permission(UEATAPIV1::PERMISSION_READ_WRITE);
+    }
+    else
+    {
+        throw std::runtime_error("Unhandled permission");
+    }
+    return result;
 }
 
 ///---------------------------------Active Key-------------------------------///

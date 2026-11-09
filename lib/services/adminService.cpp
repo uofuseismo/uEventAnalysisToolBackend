@@ -658,6 +658,76 @@ grpc::ServerUnaryReactor
                        pImpl->mLogger);
 }
 
+///--------------------------------List Users--------------------------------///
+grpc::ServerUnaryReactor
+*AdminService::ListUsers(
+    grpc::CallbackServerContext *context,
+    const UEventAnalysisToolAPI::Admin::V1::ListUsersRequest *request,
+    UEventAnalysisToolAPI::Admin::V1::ListUsersResponse *response)
+{
+    namespace UAdminV1 = UEventAnalysisToolAPI::Admin::V1;
+    class Reactor final : public GRPC::UnaryReactor
+    {   
+    public:
+        Reactor(UAdminV1::ListUsersResponse *response,
+                grpc::CallbackServerContext *context,
+                const UAdminV1::ListUsersRequest &request,
+                UAuth::UserAdministration &administration,
+                const UAuth::AdministratorTokenVerifier &verifier,
+                std::shared_ptr<spdlog::logger> loggerPtr) :
+            UnaryReactor(context,
+                         "Admin.V1.ListUsers",
+                         std::move(loggerPtr),
+                         verifier)
+        {
+            if (!isAuthenticated()){return;}
+            run([&]() -> grpc::Status
+            {
+                const auto &actor = getClaims()->getUser();
+                auto usersList = administration.listUsers(actor);
+                if (!usersList.has_value())
+                {
+                    return enumToStatus(usersList.error(), actor);
+                }
+                try
+                {
+                    const auto &activeUsers
+                        = usersList->getActiveUsersReference();
+                    for (const auto &user : activeUsers)
+                    {
+                        response->mutable_active_users()->Add(std::move(
+                           user.toMessage<UAdminV1::ListUsersResponse::ActiveUser> ()));
+                    }
+                    const auto &provisionalUser
+                        = usersList->getProvisionalUsersReference();
+                    for (const auto &user : provisionalUser)
+                    {
+                        response->mutable_provisional_users()->Add(std::move(
+                            user.toMessage<UAdminV1::ListUsersResponse::ProvisionalUser> ())); 
+                    }
+                    SPDLOG_LOGGER_INFO(&logger(),
+                                       "{}: {} listed the users",
+                                       requestIdentifier(), actor);
+                    return grpc::Status::OK;
+                }
+                catch (const std::exception &e)
+                {
+                    SPDLOG_LOGGER_WARN(&logger(),
+                       "{}: Failed to make user list for {} because {}",
+                       requestIdentifier(), actor, e.what());
+                    return {grpc::StatusCode::INTERNAL,
+                       "Server error - contact maintainer"};
+                }
+            });
+        };
+    };
+    return new Reactor(response,
+                       context,
+                       *request,
+                       *pImpl->mUserAdministration,
+                       *pImpl->mAdministratorTokenVerifier,
+                       pImpl->mLogger);
+}
 
 /// Destructor
 AdminService::~AdminService() = default;

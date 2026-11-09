@@ -145,6 +145,10 @@ void UnaryReactor::finish(const  grpc::Status &status)
     Finish(status);
 }
 
+const std::string &UnaryReactor::requestIdentifier() const noexcept
+{
+    return mRequestIdentifier;
+}
 
 void UnaryReactor::OnDone()
 {

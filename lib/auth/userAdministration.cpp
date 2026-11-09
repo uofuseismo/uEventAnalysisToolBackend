@@ -868,7 +868,7 @@ UserAdministration::revokePermission(const std::string &actorIn,
 }
 
 /// Reset a password
-std::expected<std::vector<UserList>,
+std::expected<UserList,
               UserAdministration::ReturnCode>
 UserAdministration::listUsers(const std::string &actorIn) const
 {   
@@ -889,7 +889,7 @@ UserAdministration::listUsers(const std::string &actorIn) const
     try                      
     {   
 // TODO
-        std::vector<UserList> result;
+        UserList result;
         return result;
     }
     catch (const std::exception &e)

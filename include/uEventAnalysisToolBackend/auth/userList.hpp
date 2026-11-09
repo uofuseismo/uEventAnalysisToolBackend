@@ -398,7 +398,6 @@ public:
     ///         or \c setPasswordNotReset() was called.
     [[nodiscard]] bool wasPasswordResetSet() const noexcept;
 
-
     /// @brief The time when the user last logged in by password or key.
     void setLastLogin(const std::chrono::microseconds &timestamp);
     /// @result The time when the user last logged in.

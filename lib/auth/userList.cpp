@@ -928,10 +928,12 @@ public:
     std::chrono::microseconds mWhenExpired;
     bool mIsAdministrator;
     bool mIsExpired;
+    bool mPasswordReset;
     bool mIsAdministratorSet{false};
     bool mHasWhenCreated{false};
     bool mHasWhenExpired{false};
     bool mHasIsExpired{false};
+    bool mHasPaswordReset{false};
 };
 
 /// Constructor
@@ -1063,6 +1065,32 @@ bool ProvisionalUser::wasIsExpiredSet() const noexcept
     return pImpl->mHasIsExpired;
 }
 
+void ProvisionalUser::setPasswordReset() noexcept
+{
+    pImpl->mPasswordReset = true;
+    pImpl->mHasPaswordReset = true;
+}
+
+void ProvisionalUser::setPasswordNotReset() noexcept
+{
+    pImpl->mPasswordReset = false;
+    pImpl->mHasPaswordReset = true;
+}
+
+bool ProvisionalUser::passwordReset() const
+{
+    if (!wasPasswordResetSet())
+    {
+        throw std::runtime_error("Password reset status not set");
+    }
+    return pImpl->mPasswordReset;
+}
+
+bool ProvisionalUser::wasPasswordResetSet() const noexcept
+{
+    return pImpl->mHasPaswordReset;
+}
+
 /// Creation time
 void ProvisionalUser::setWhenCreated(const std::chrono::microseconds &timestamp)
 {
@@ -1186,7 +1214,7 @@ ProvisionalUser::toMessage() const
         = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
              getExpiration().count());
     result.set_expired(isExpired());
-
+    result.set_password_reset(passwordReset());
     auto lastLogin = getLastLogin();
     if (lastLogin != std::nullopt)
     {
@@ -1265,5 +1293,17 @@ UserList& UserList::operator=(UserList &&list) noexcept
     if (&list == this){return *this;}
     pImpl = std::move(list.pImpl);
     return *this;
+}
+
+const std::vector<ActiveUser>
+&UserList::getActiveUsersReference() const noexcept
+{
+    return pImpl->mActiveUsers;
+}
+
+const std::vector<ProvisionalUser> 
+&UserList::getProvisionalUsersReference() const noexcept
+{
+    return pImpl->mProvisionalUsers;
 }
 

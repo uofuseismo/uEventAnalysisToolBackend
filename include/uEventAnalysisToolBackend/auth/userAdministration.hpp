@@ -3,7 +3,6 @@
 #include <expected>
 #include <memory>
 #include <string>
-#include <vector>
 #include <spdlog/logger.h>
 namespace UEventAnalysisToolBackend::Auth
 {
@@ -80,7 +79,7 @@ public:
     [[nodiscard]] ReturnCode revokeAdministrator(const std::string &actor, const std::string &name);
 
     /// @brief Lists the users.
-    [[nodiscard]] std::expected<std::vector<UserList>, ReturnCode> listUsers(const std::string &actor) const;
+    [[nodiscard]] std::expected<UserList, ReturnCode> listUsers(const std::string &actor) const;
 
     ~UserAdministration();
 

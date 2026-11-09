@@ -12,6 +12,8 @@ namespace UEventAnalysisToolAPI::Admin::V1
  class CreateUserResponse;
  class DeleteUserRequest;
  class DeleteUserResponse;
+ class ListUsersRequest;
+ class ListUsersResponse;
  class LoginWithPasswordRequest;
  class LoginWithPasswordResponse;
  class SetAdministratorRequest;
@@ -96,6 +98,12 @@ public:
             grpc::CallbackServerContext *context,
             const UEventAnalysisToolAPI::Admin::V1::RevokeAdministratorRequest *request,
             UEventAnalysisToolAPI::Admin::V1::RevokeAdministratorResponse *response) override;
+
+    grpc::ServerUnaryReactor
+        *ListUsers(
+            grpc::CallbackServerContext *context,
+            const UEventAnalysisToolAPI::Admin::V1::ListUsersRequest *request,
+            UEventAnalysisToolAPI::Admin::V1::ListUsersResponse *response) override;
 
     virtual ~AdminService();
 

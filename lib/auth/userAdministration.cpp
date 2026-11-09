@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cstddef>
 #include <cctype>
 #include <exception>
 #include <expected>
@@ -11,6 +12,7 @@
 #include <spdlog/logger.h>
 #include "uEventAnalysisToolBackend/auth/userAdministration.hpp"
 #include "uEventAnalysisToolBackend/auth/userAdministrationOptions.hpp"
+#include "uEventAnalysisToolBackend/auth/userList.hpp"
 #include "uEventAnalysisToolBackend/auth/password/hasher.hpp"
 #include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
@@ -862,6 +864,40 @@ UserAdministration::revokePermission(const std::string &actorIn,
                             "Failed to revoke permission for {} because {}",
                             name, e.what());
         return ReturnCode::ServerError;
+    }
+}
+
+/// Reset a password
+std::expected<std::vector<UserList>,
+              UserAdministration::ReturnCode>
+UserAdministration::listUsers(const std::string &actorIn) const
+{   
+    if (!isInitialized())
+    {
+        SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+                            "User administration class not initialized");
+        return std::unexpected(ReturnCode::ServerError);
+    }        
+        
+    auto actor = ::transform(actorIn);
+    if (actor.empty())      
+    {   
+        SPDLOG_LOGGER_WARN(pImpl->mLogger, "Actor is empty or invalid");
+        return std::unexpected(ReturnCode::InvalidArgument);
+    }
+    
+    try                      
+    {   
+// TODO
+        std::vector<UserList> result;
+        return result;
+    }
+    catch (const std::exception &e)
+    {
+        SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+                            "Failed to create list for {} because {}",
+                            actor, e.what());
+        return std::unexpected(ReturnCode::ServerError);
     }
 }
 

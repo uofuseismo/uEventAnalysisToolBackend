@@ -279,6 +279,14 @@ public:
     /// @result True indicates that account creation time was set.
     [[nodiscard]] bool hasWhenCreated() const noexcept;
 
+    /// @brief The time when the password on the account was last updated.
+    void setWhenPasswordUpdated(const std::chrono::microseconds &timestamp);
+    /// @result The time when the password on the account was last updated.
+    /// @throws std::runtime_error if \c hasWhenPasswordUpdated() is false.
+    [[nodiscard]] std::chrono::microseconds getWhenPasswordUpdated() const;
+    /// @result True indicates that the password update time was set.
+    [[nodiscard]] bool hasWhenPasswordUpdated() const noexcept;
+
     /// @brief The time when the user last logged in by password or key.
     void setLastLogin(const std::chrono::microseconds &timestamp);
     /// @result The time when the user last logged in.
@@ -337,13 +345,16 @@ public:
     /// @result True indicates the user's name was est.
     [[nodiscard]] bool hasName() const noexcept;
 
-    /// @brief The time when the issued password stops working.
-    void setExpiration(const std::chrono::microseconds &timestamp);
-    /// @result The time when the issued password stops working.
-    /// @throws std::runtime_error if \c hasExpiration() is false.
-    [[nodiscard]] std::chrono::microseconds getExpiration() const;
-    /// @result True indicates the password expiration was set.
-    [[nodiscard]] bool hasExpiration() const noexcept;
+    /// @brief Indicate this user is an administrator.
+    void setIsAdministrator() noexcept;
+    /// @brief Indicate this user is not an administrator.
+    void setIsNotAdministrator() noexcept;
+    /// @result True indicates this is an administrative user.
+    /// @throws std::runtime_error if \c wasIsAdministratorSet() is false.
+    [[nodiscard]] bool isAdministrator() const;
+    /// @result True indicates \c setIsAdministrator() or
+    ///         \c setIsNotAdministrator() was called.
+    [[nodiscard]] bool wasIsAdministratorSet() const noexcept;
 
     /// @brief The time when the accounts was created.
     void setWhenCreated(const std::chrono::microseconds &timestamp);
@@ -352,6 +363,16 @@ public:
     [[nodiscard]] std::chrono::microseconds getWhenCreated() const;
     /// @result True indicates that account creation time was set.
     [[nodiscard]] bool hasWhenCreated() const noexcept;
+
+    /// @brief The time when the issued password ceases to work.
+    ///        After this point the user is locked out until an
+    ///        admin resets the password.
+    void setExpiration(const std::chrono::microseconds &timestamp);
+    /// @result The time when the issued password ceases to work.
+    /// @throws std::runtime_error if \c hasExpiration() is false.
+    [[nodiscard]] std::chrono::microseconds getExpiration() const;
+    /// @result True indicates that account expiration time was set.
+    [[nodiscard]] bool hasExpiration() const noexcept;
 
     /// @brief Indicate the account expiration has passed and the user
     ///        is locked out until an admin resets their password.
@@ -366,6 +387,18 @@ public:
     ///         was called.
     [[nodiscard]] bool wasIsExpiredSet() const noexcept;
 
+    /// @brief Indicates a reset of a previously active user.
+    void setPasswordReset() noexcept;
+    /// @brief Indicates a new user has yet to create a password of their own.
+    void setPasswordNotReset() noexcept;
+    /// @result True indicates the account expired.
+    /// @throws std::runtime_error \c wasPasswordReset() is false.
+    [[nodiscard]] bool passwordReset() const;
+    /// @result True indicates that \c setPasswordReset()
+    ///         or \c setPasswordNotReset() was called.
+    [[nodiscard]] bool wasPasswordResetSet() const noexcept;
+
+
     /// @brief The time when the user last logged in by password or key.
     void setLastLogin(const std::chrono::microseconds &timestamp);
     /// @result The time when the user last logged in.
@@ -377,10 +410,19 @@ public:
     /// @result The schema permissions this will be able to access.
     [[nodiscard]] std::vector<SchemaPermission> getSchemaPermissions() const noexcept;
 
+    /// @brief Sets the active keys.
+    void setActiveKeys(std::vector<ActiveKey> &&activeKeys);
+    /// @result The active keys.
+    [[nodiscard]] std::vector<ActiveKey> getActiveKeys() const noexcept;
+
     /// @brief Sets the inactive keys.
     void setInactiveKeys(std::vector<InactiveKey> &&inactiveKeys);
     /// @result The inactive keys.
     [[nodiscard]] std::vector<InactiveKey> getInactiveKeys() const noexcept;
+
+    /// @brief Converts this class to a message.
+    /// @note This is defined for UEventAnalysisToolAPI::Admin::V1::ListUsersResponse::ProvisionalUser.
+    template<typename U> [[nodiscard]] U toMessage() const;
 
     /// @brief Copy assignment.
     ProvisionalUser& operator=(const ProvisionalUser &user);
@@ -411,11 +453,18 @@ public:
     void setActiveUsers(std::vector<ActiveUser> &&activeUsers);
     /// @result The active users.
     [[nodiscard]] std::vector<ActiveUser> getActiveUsers() const noexcept;
- 
+    /// @result A constant reference to the active users.
+    /// @note You should use \c getActiveUsers() instead.
+    [[nodiscard]] const std::vector<ActiveUser> &getActiveUsersReference() const noexcept;
+
     /// @brief Sets the provisional users.
     void setProvisionalUsers(std::vector<ProvisionalUser> &&provisionalUsers);
     /// @result The provisional users.
     [[nodiscard]] std::vector<ProvisionalUser> getProvisionalUsers() const noexcept;
+    /// @result A constant reference to the provisional users.
+    /// @note You should use \c getProvisionalUsers() instead.
+    [[nodiscard]] const std::vector<ProvisionalUser> &getProvisionalUsersReference() const noexcept;
+
 
     /// @brief Copy assignment.
     UserList& operator=(const UserList &list);

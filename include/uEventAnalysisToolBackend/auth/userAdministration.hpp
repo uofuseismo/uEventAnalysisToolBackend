@@ -3,10 +3,12 @@
 #include <expected>
 #include <memory>
 #include <string>
+#include <vector>
 #include <spdlog/logger.h>
 namespace UEventAnalysisToolBackend::Auth
 {
  class UserAdministrationOptions;
+ class UserList;
 }
 namespace UEventAnalysisToolBackend::Auth
 {
@@ -76,6 +78,9 @@ public:
 
     /// @brief Removes an administrator's privileges.
     [[nodiscard]] ReturnCode revokeAdministrator(const std::string &actor, const std::string &name);
+
+    /// @brief Lists the users.
+    [[nodiscard]] std::expected<std::vector<UserList>, ReturnCode> listUsers(const std::string &actor) const;
 
     ~UserAdministration();
 

@@ -13,6 +13,75 @@
 using namespace UEventAnalysisToolBackend::Auth;
 namespace UEATAPIV1 = UEventAnalysisToolAPI::Admin::V1;
 
+namespace
+{
+
+void checkSchemaPermission(const SchemaPermission &permission)
+{
+    if (!permission.hasSchema())
+    {
+        throw std::invalid_argument("Schema not set");
+    }
+    if (!permission.hasPermission())
+    {
+        throw std::invalid_argument("Permission not set");
+    }
+    if (!permission.hasWhenGranted())
+    {
+        throw std::invalid_argument("Grant time not set");
+    }
+}
+
+void checkActiveKey(const ActiveKey &key)
+{
+    if (!key.hasName())
+    {
+        throw std::invalid_argument("Key name not set");
+    }
+    if (!key.hasAlgorithm())
+    {
+        throw std::invalid_argument("Algorithm name not set");
+    }
+    if (!key.hasFingerprint())
+    {
+        throw std::invalid_argument("Fingerprint not set");
+    }
+    if (!key.hasWhenRegistered())
+    {
+        throw std::invalid_argument("Registration time not set");
+    }
+}
+
+void checkInactiveKey(const InactiveKey &key)
+{
+    if (!key.hasName())
+    {
+        throw std::invalid_argument("Key name not set");
+    }
+    if (!key.hasAlgorithm())
+    {
+        throw std::invalid_argument("Algorithm name not set");
+    }
+    if (!key.hasReason())
+    {
+        throw std::invalid_argument("Reason not set");
+    }
+    if (!key.hasFingerprint())
+    {
+        throw std::invalid_argument("Fingerprint not set");
+    }
+    if (!key.hasWhenRegistered())
+    {
+        throw std::invalid_argument("Registration time not set");
+    }
+    if (!key.hasWhenInvalidated())
+    {
+        throw std::invalid_argument("Invalidation time not set");
+    }
+}
+
+}
+
 ///-------------------------------Schema Permission--------------------------///
  
 class SchemaPermission::SchemaPermissionImpl
@@ -324,15 +393,9 @@ ActiveKey::toMessage() const
 {
     UEATAPIV1::ListUsersResponse::ActiveKey result;
     result.set_name(getName());
-    auto algorithm = getAlgorithm(); 
-    if (permission == ActiveKey::Algorithm::ed25519)
-    {   
-        //result.set_algorithm(UEATAPIV1::KEY_ALGORITHM_ED25519);
-    }   
-    else
-    {   
-        throw std::runtime_error("Unhandled key algorithm");
-    }   
+    *result.mutable_registered()
+        = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
+             getWhenRegistered().count());
     result.set_fingerprint(getFingerprint());
     auto expiration = getExpiration();
     if (expiration != std::nullopt)
@@ -348,6 +411,16 @@ ActiveKey::toMessage() const
             = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
                   lastUsed->count());
     }
+    auto algorithm = getAlgorithm(); 
+    if (algorithm == ActiveKey::Algorithm::ed25519)
+    {   
+        result.set_algorithm(
+           UEATAPIV1::ListUsersResponse_SignatureAlgorithm_SIGNATURE_ALGORITHM_ED25519);
+    }   
+    else
+    {   
+        throw std::runtime_error("Unhandled key signature algorithm");
+    }   
     return result;
 }
 
@@ -444,6 +517,28 @@ bool InactiveKey::hasAlgorithm() const noexcept
     return pImpl->mHasAlgorithm;
 }
 
+/// Fingerprint
+void InactiveKey::setFingerprint(const std::string &fingerprint)
+{
+    if (fingerprint.empty())
+    {    
+        throw std::invalid_argument("Fingerprint is empty");
+    }    
+    pImpl->mFingerprint = fingerprint;
+}
+
+std::string InactiveKey::getFingerprint() const
+{
+    if (!hasName()){throw std::runtime_error("Fingerprint not set");}
+    return pImpl->mFingerprint;
+}
+
+bool InactiveKey::hasFingerprint() const noexcept
+{
+    return !pImpl->mFingerprint.empty();
+}
+
+
 /// Reason
 void InactiveKey::setReason(const Reason reason) noexcept
 {
@@ -534,6 +629,55 @@ bool InactiveKey::hasWhenInvalidated() const noexcept
     return pImpl->mHasWhenInvalidated;
 }
 
+template<>
+UEATAPIV1::ListUsersResponse::InactiveKey
+InactiveKey::toMessage() const
+{
+    UEATAPIV1::ListUsersResponse::InactiveKey result;
+    result.set_name(getName());
+    *result.mutable_registered()
+        = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
+             getWhenRegistered().count());
+    result.set_fingerprint(getFingerprint());
+    *result.mutable_invalidated()
+        = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
+                  getWhenInvalidated().count());
+    auto lastUsed = getLastUsed();
+    if (lastUsed != std::nullopt)
+    {
+        *result.mutable_last_used()
+            = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
+                  lastUsed->count());
+    }
+    auto algorithm = getAlgorithm();
+    if (algorithm == InactiveKey::Algorithm::ed25519)
+    {
+        result.set_algorithm(
+           UEATAPIV1::ListUsersResponse_SignatureAlgorithm_SIGNATURE_ALGORITHM_ED25519);
+    }
+    else
+    {
+        throw std::runtime_error("Unhandled key signature algorithm");
+    }
+    auto reason = getReason();
+    if (reason == InactiveKey::Reason::Revoked)
+    {
+        result.set_reason(
+           UEATAPIV1::ListUsersResponse_InactiveKey_Reason_REASON_REVOKED);
+    }
+    else if (reason == InactiveKey::Reason::Expired)
+    {
+        result.set_reason(
+           UEATAPIV1::ListUsersResponse_InactiveKey_Reason_REASON_EXPIRED);
+    }
+    else
+    {
+        throw std::runtime_error("Unhandled reason");
+    }
+    return result;
+}
+
+
 ///----------------------------------Active User-----------------------------///
 
 class ActiveUser::ActiveUserImpl
@@ -545,9 +689,11 @@ public:
     std::string mName; 
     std::optional<std::chrono::microseconds> mLastLogin{std::nullopt};
     std::chrono::microseconds mWhenCreated;
+    std::chrono::microseconds mPasswordUpdated;
     bool mIsAdministrator;
     bool mIsAdministratorSet{false};
     bool mHasWhenCreated{false};
+    bool mHasWhenPasswordUpdated{false};
 };
 
 /// Constructor
@@ -659,6 +805,14 @@ bool ActiveUser::hasWhenCreated() const noexcept
 /// Last login
 void ActiveUser::setLastLogin(const std::chrono::microseconds &timestamp)
 {
+    if (hasWhenCreated())
+    {
+        if (timestamp < pImpl->mWhenCreated)
+        {
+            throw std::invalid_argument(
+                "Cannot login before account is created");
+        }
+    }
     pImpl->mLastLogin
         = std::make_optional<std::chrono::microseconds> (timestamp);
 }
@@ -675,18 +829,7 @@ void ActiveUser::setSchemaPermissions(
 {
     for (const auto &permission : permissions)
     {
-        if (!permission.hasSchema())
-        {
-            throw std::invalid_argument("Schema not set");
-        }
-        if (!permission.hasPermission())
-        {
-            throw std::invalid_argument("Permission not set");
-        }
-        if (!permission.hasWhenGranted())
-        {
-            throw std::invalid_argument("Grant time not set");
-        }
+        ::checkSchemaPermission(permission);
     }
     pImpl->mSchemaPermissions = std::move(permissions);
 }
@@ -702,22 +845,7 @@ void ActiveUser::setActiveKeys(std::vector<ActiveKey> &&activeKeys)
 {
     for (const auto &key : activeKeys)
     {
-        if (!key.hasName())
-        {
-            throw std::invalid_argument("Key name not set");
-        }
-        if (!key.hasAlgorithm())
-        {
-            throw std::invalid_argument("Algorithm name not set");
-        }
-        if (!key.hasFingerprint())
-        {
-            throw std::invalid_argument("Fingerprint not set");
-        }
-        if (!key.hasWhenRegistered())
-        {
-            throw std::invalid_argument("Registration time not set");
-        }
+        ::checkActiveKey(key);
     }
     pImpl->mActiveKeys = std::move(activeKeys);
 }
@@ -727,35 +855,12 @@ std::vector<ActiveKey> ActiveUser::getActiveKeys() const noexcept
     return pImpl->mActiveKeys;
 }
 
-/// Revoked keys
+/// Inactive keys
 void ActiveUser::setInactiveKeys(std::vector<InactiveKey> &&keys)
 {
     for (const auto &key : keys)
     {
-        if (!key.hasName())
-        {
-            throw std::invalid_argument("Key name not set");
-        }
-        if (!key.hasAlgorithm())
-        {
-            throw std::invalid_argument("Algorithm name not set");
-        }
-        if (!key.hasReason())
-        {
-            throw std::invalid_argument("Reason not set");
-        }
-        if (!key.hasFingerprint())
-        {
-            throw std::invalid_argument("Fingerprint not set");
-        }
-        if (!key.hasWhenRegistered())
-        {
-            throw std::invalid_argument("Registration time not set");
-        }
-        if (!key.hasWhenInvalidated())
-        {
-            throw std::invalid_argument("Invalidation time not set");
-        }
+        ::checkInactiveKey(key);
     }
     pImpl->mInactiveKeys = std::move(keys);
 }
@@ -763,6 +868,50 @@ void ActiveUser::setInactiveKeys(std::vector<InactiveKey> &&keys)
 std::vector<InactiveKey> ActiveUser::getInactiveKeys() const noexcept
 {
     return pImpl->mInactiveKeys;
+}
+
+template<>
+UEATAPIV1::ListUsersResponse::ActiveUser
+ActiveUser::toMessage() const
+{
+    UEATAPIV1::ListUsersResponse::ActiveUser result;
+    result.set_name(getName());
+    result.set_administrator(isAdministrator());
+    *result.mutable_created()
+        = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
+             getWhenCreated().count());
+    auto lastLogin = getLastLogin();
+    if (lastLogin != std::nullopt)
+    {
+        *result.mutable_last_login()
+            = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
+                 lastLogin->count());
+    }
+    for (const auto &permission : pImpl->mSchemaPermissions)
+    {
+        result.mutable_permissions()->Add(
+        std::move(
+              permission.toMessage
+                  <UEATAPIV1::ListUsersResponse::SchemaPermission> ())
+        );
+    }
+    for (const auto &key : pImpl->mActiveKeys)
+    {
+        result.mutable_active_keys()->Add(
+        std::move(
+              key.toMessage
+                  <UEATAPIV1::ListUsersResponse::ActiveKey> ())
+        );
+    }
+    for (const auto &key : pImpl->mInactiveKeys)
+    {
+        result.mutable_inactive_keys()->Add(
+        std::move(
+              key.toMessage
+                  <UEATAPIV1::ListUsersResponse::InactiveKey> ())
+        );
+    }
+    return result;
 }
 
 ///------------------------------Provisional User----------------------------///
@@ -778,9 +927,11 @@ public:
     std::chrono::microseconds mWhenCreated;
     std::chrono::microseconds mWhenExpired;
     bool mIsAdministrator;
+    bool mIsExpired;
     bool mIsAdministratorSet{false};
     bool mHasWhenCreated{false};
-    bool mHasExpired{false};
+    bool mHasWhenExpired{false};
+    bool mHasIsExpired{false};
 };
 
 /// Constructor
@@ -817,6 +968,302 @@ ProvisionalUser& ProvisionalUser::operator=(ProvisionalUser &&user) noexcept
 {
     if (&user == this){return *this;}
     pImpl = std::move(user.pImpl);
+    return *this;
+}
+
+/// User name
+void ProvisionalUser::setName(const std::string &name)
+{
+    if (name.empty())
+    {
+        throw std::invalid_argument("User name is empty");
+    }
+    pImpl->mName = name;
+}
+
+std::string ProvisionalUser::getName() const
+{
+    if (!hasName()){throw std::runtime_error("User name not set");}
+    return pImpl->mName;
+}
+
+bool ProvisionalUser::hasName() const noexcept
+{
+    return !pImpl->mName.empty();
+}
+
+/// Administrator status
+void ProvisionalUser::setIsAdministrator() noexcept
+{
+    pImpl->mIsAdministrator = true;
+    pImpl->mIsAdministratorSet = true;
+}
+
+void ProvisionalUser::setIsNotAdministrator() noexcept
+{
+    pImpl->mIsAdministrator = false;
+    pImpl->mIsAdministratorSet = true;
+}
+
+bool ProvisionalUser::isAdministrator() const
+{
+    if (!wasIsAdministratorSet())
+    {   
+        throw std::runtime_error("Administrator status not set");
+    }
+    return pImpl->mIsAdministrator;
+}
+
+bool ProvisionalUser::wasIsAdministratorSet() const noexcept
+{
+    return pImpl->mIsAdministratorSet;
+}
+
+/// Schema permissions
+void ProvisionalUser::setSchemaPermissions(
+    std::vector<SchemaPermission> &&permissions)
+{
+    for (const auto &permission : permissions)
+    {
+        ::checkSchemaPermission(permission);
+    }
+    pImpl->mSchemaPermissions = std::move(permissions);
+}
+
+std::vector<SchemaPermission> 
+ProvisionalUser::getSchemaPermissions() const noexcept
+{
+    return pImpl->mSchemaPermissions;
+}
+
+/// Password expired?
+void ProvisionalUser::setExpired() noexcept
+{
+    pImpl->mIsExpired = true;
+    pImpl->mHasIsExpired = true;
+}
+
+void ProvisionalUser::setNotExpired() noexcept
+{
+    pImpl->mIsExpired = false;
+    pImpl->mHasIsExpired = true;
+}
+
+bool ProvisionalUser::isExpired() const
+{
+    if (!wasIsExpiredSet())
+    {
+        throw std::runtime_error("Password reset toggle not set");
+    }
+    return pImpl->mIsExpired;
+}
+
+bool ProvisionalUser::wasIsExpiredSet() const noexcept
+{
+    return pImpl->mHasIsExpired;
+}
+
+/// Creation time
+void ProvisionalUser::setWhenCreated(const std::chrono::microseconds &timestamp)
+{
+    if (hasExpiration())
+    {
+        if (pImpl->mWhenExpired < timestamp)
+        {
+            throw std::invalid_argument(
+               "Account cannot be expire before being created");
+        }
+    }
+    pImpl->mWhenCreated = timestamp;
+    pImpl->mHasWhenCreated = true;
+}
+
+std::chrono::microseconds ProvisionalUser::getWhenCreated() const
+{
+    if (!hasWhenCreated())
+    {
+        throw std::runtime_error("User creation time not set");
+    }
+    return pImpl->mWhenCreated;
+}
+
+bool ProvisionalUser::hasWhenCreated() const noexcept
+{
+    return pImpl->mHasWhenCreated;
+}
+
+/// Expiration time
+void ProvisionalUser::setExpiration(const std::chrono::microseconds &timestamp)
+{
+    if (hasWhenCreated())
+    {
+        if (timestamp < pImpl->mWhenCreated)
+        {
+            throw std::invalid_argument(
+                "Account cannot expire before being created");
+        }
+    }
+    pImpl->mWhenExpired = timestamp;
+    pImpl->mHasWhenExpired = true;
+}
+
+std::chrono::microseconds ProvisionalUser::getExpiration() const
+{
+    if (!hasExpiration())
+    {    
+        throw std::runtime_error("Account expiration time not set");
+    }    
+    return pImpl->mWhenExpired;
+}
+
+bool ProvisionalUser::hasExpiration() const noexcept
+{
+    return pImpl->mHasWhenExpired;
+}
+
+/// Last login
+void ProvisionalUser::setLastLogin(const std::chrono::microseconds &timestamp)
+{
+    if (hasWhenCreated())
+    {
+        if (timestamp < pImpl->mWhenCreated)
+        {
+            throw std::invalid_argument(
+                "Cannot login before account is created");
+        }
+    }
+    pImpl->mLastLogin
+        = std::make_optional<std::chrono::microseconds> (timestamp);
+}
+
+std::optional<std::chrono::microseconds>
+ProvisionalUser::getLastLogin() const noexcept
+{
+    return pImpl->mLastLogin;
+}
+
+/// Active keys
+void ProvisionalUser::setActiveKeys(std::vector<ActiveKey> &&activeKeys)
+{
+    for (const auto &key : activeKeys)
+    {
+        ::checkActiveKey(key);
+    }
+    pImpl->mActiveKeys = std::move(activeKeys);
+}
+
+std::vector<ActiveKey> ProvisionalUser::getActiveKeys() const noexcept
+{
+    return pImpl->mActiveKeys;
+}
+
+/// Inactive keys
+void ProvisionalUser::setInactiveKeys(std::vector<InactiveKey> &&keys)
+{
+    for (const auto &key : keys)
+    {
+        ::checkInactiveKey(key);
+    }
+    pImpl->mInactiveKeys = std::move(keys);
+}
+
+std::vector<InactiveKey> ProvisionalUser::getInactiveKeys() const noexcept
+{
+    return pImpl->mInactiveKeys;
+}
+
+template<>
+UEATAPIV1::ListUsersResponse::ProvisionalUser
+ProvisionalUser::toMessage() const
+{
+    UEATAPIV1::ListUsersResponse::ProvisionalUser result;
+    result.set_name(getName());
+    result.set_administrator(isAdministrator());
+    *result.mutable_created()
+        = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
+             getWhenCreated().count());
+    *result.mutable_expiration()
+        = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
+             getExpiration().count());
+    result.set_expired(isExpired());
+
+    auto lastLogin = getLastLogin();
+    if (lastLogin != std::nullopt)
+    {
+        *result.mutable_last_login()
+            = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
+                 lastLogin->count());
+    }
+    for (const auto &permission : pImpl->mSchemaPermissions)
+    {
+        result.mutable_permissions()->Add(
+        std::move(
+              permission.toMessage
+                  <UEATAPIV1::ListUsersResponse::SchemaPermission> ())
+        );
+    }
+    for (const auto &key : pImpl->mActiveKeys)
+    {
+        result.mutable_active_keys()->Add(
+        std::move(
+              key.toMessage
+                  <UEATAPIV1::ListUsersResponse::ActiveKey> ())
+        );
+    }
+    for (const auto &key : pImpl->mInactiveKeys)
+    {
+        result.mutable_inactive_keys()->Add(
+        std::move(
+              key.toMessage
+                  <UEATAPIV1::ListUsersResponse::InactiveKey> ())
+        );
+    }
+    return result;
+}
+
+///---------------------------------User List--------------------------------///
+
+class UserList::UserListImpl
+{
+public:
+    std::vector<ActiveUser> mActiveUsers;
+    std::vector<ProvisionalUser> mProvisionalUsers;
+};
+
+/// Constructor
+UserList::UserList() :
+    pImpl(std::make_unique<UserListImpl> ())
+{
+}
+
+/// Copy constructor
+UserList::UserList(const UserList &list)
+{
+    *this = list;
+}
+
+/// Move constructor
+UserList::UserList(UserList &&list) noexcept
+{
+    *this = std::move(list);
+}
+
+/// Destructor
+UserList::~UserList() = default;
+
+/// Copy assignment
+UserList& UserList::operator=(const UserList &list)
+{
+    if (&list == this){return *this;}
+    pImpl = std::make_unique<UserListImpl> (*list.pImpl);
+    return *this;
+}
+
+/// Move assignment
+UserList& UserList::operator=(UserList &&list) noexcept
+{
+    if (&list == this){return *this;}
+    pImpl = std::move(list.pImpl);
     return *this;
 }
 

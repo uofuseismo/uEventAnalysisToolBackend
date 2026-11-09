@@ -124,6 +124,8 @@ message ListUsersResponse {
       // this is always unset for a new user or, for a reset user, if they
       // have yet to log in even prior to the reset.
       google.protobuf.Timestamp last_login = 7;
+      // The schemas the user may access.  This can be empty.
+      repeated SchemaPermission permissions = 8;
       // The keys the user will be able to log in with.  This may be empty.
       repeated ActiveKey active_keys = 9;
       /// The user's inactive keys.  May be empty.  A reset that revoked

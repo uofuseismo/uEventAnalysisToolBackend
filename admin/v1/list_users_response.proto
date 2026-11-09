@@ -81,8 +81,19 @@ message ListUsersResponse {
       bool administrator = 2;
       // When the account was created.
       google.protobuf.Timestamp created = 3;
-      // The last time this user logged in.
-      google.protobuf.Timestamp last_login = 4;
+      // When the user last set their password.
+      google.protobuf.Timestamp password_updated = 4;
+      // The last time this user logged in by password or by key.
+      // This MAY BE UNSET - in this the unset case the user has not yet
+      // logged in since replacing their issued password (hence, replacing
+      // an issued password is not a login).
+      google.protobuf.Timestamp last_login = 5;
+      // The schemas the user may access.  This can be empty.
+      repeated SchemaPermission permissions = 6;
+      // The keys the user may log in with.  This can be empty.
+      repeated ActiveKey active_keys = 7;
+      // The keys the user may not longer log in with.  This can be empty.
+      repeated InactiveKey inactive_keys = 8;
    }
 
    // This is a user that has not yet activated their account.
@@ -95,6 +106,21 @@ message ListUsersResponse {
       google.protobuf.Timestamp created = 3;
       // When the provisional status expires.
       google.protobuf.Timestamp expiration = 4;
+      // True indicates that the expiration has passed and the user is locked
+      // out until an administrator resets their password.
+      bool expired = 5;
+      // True indicates a reset of a previously active user.  
+      // False indicates a new user who never yet had a password of their own.
+      bool password_reset = 6;
+      // The last time this user logged in.  This MAY BE UNSET - in particular
+      // this is always unset for a new user or, for a reset user, if they
+      // have yet to log in even prior to the reset.
+      google.protobuf.Timestamp last_login = 7;
+      // The keys the user will be able to log in with.  This may be empty.
+      repeated ActiveKey active_keys = 9;
+      /// The user's inactive keys.  May be empty.  A reset that revoked
+      /// the user's keys leaves them here.
+      repeated InactiveKey inactive_keys = 10;
    }
 
    // The active users.

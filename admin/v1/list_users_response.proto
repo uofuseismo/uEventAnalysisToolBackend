@@ -4,9 +4,73 @@ import "google/protobuf/timestamp.proto";
 package UEventAnalysisToolAPI.Admin.V1;
 
 /**
- * The list of users.
+ * Lists the users in a system for administrative purpsoes.
+ * Note, if a field is prefaced by "MAY BE UNSET" then the client
+ * should check before using e.g.,
+ *    C++:        has_last_login();
+ *    TypeScript: lastLogin !== undefined
+ *    Dart:       hasLastLogin()
  */
 message ListUsersResponse {
+   // A user's access to one schema.  Every field is always set.
+   message SchemaPermission {
+      // The schema, e.g., utah, ynp, forge, etc.
+      string schema = 1;
+      // The privileges in that schema.  Never PERMISSION_NOT_SPECIFIED.
+      Permission permission = 2;
+      // When this permission was granted or last changed.  ALWAYS SET.
+      google.protobuf.Timestamp granted = 3;
+   }
+
+   // A key the user may log in with, unless it has expired.
+   message Key {
+      // The user's label for the key, e.g., laptop.  Unique per user.
+      string name = 1;
+      // The signature algorithm, e.g., ed25519.
+      string algorithm = 2;
+      // SHA-256 fingerprint of the public key, e.g., SHA256:3q2+7w...
+      // Enough to tell keys apart; the key itself is not sent.
+      string fingerprint = 3;
+      // When the key was registered.  ALWAYS SET.
+      google.protobuf.Timestamp created = 4;
+      // When the key stops working.  MAY BE UNSET: unset means it
+      // never expires.  A time in the past means it has expired.
+      google.protobuf.Timestamp expires = 5;
+      // When the key was last used to log in.  MAY BE UNSET: unset
+      // means it has never been used.
+      google.protobuf.Timestamp last_used = 6;
+   }
+
+   // A key that can no longer be used either because it has expired or
+   // because it was revoked.  Kept as an audit trail.
+   message InactiveKey {
+      enum Reason {
+         // No reason provided as to why the key is invalid. 
+         REASON_NOT_SPECIFIED = 0;
+         // The key was revoked.
+         REASON_REVOKED = 1;
+         // The key has expired.
+         REASON_EXPIRED = 2;
+      }
+      // The user's label for the key, e.g., laptop.
+      string name = 1;
+      // The signature algorithm, e.g., ed25519.
+      string algorithm = 2;
+      // SHA-256 fingerprint of the public key.
+      string fingerprint = 3;
+      // When the key was registered.  ALWAYS SET.
+      google.protobuf.Timestamp created = 4;
+      // When the key was invalidated.  ALWAYS SET. 
+      // Note, if a key expired and was then revoked then this
+      // is when the key expired - i.e., the earlier of the two.
+      google.protobuf.Timestamp invalidated = 5;
+      // When the key was last used to log in.  MAY BE UNSET: unset
+      // means it was never used.
+      google.protobuf.Timestamp last_used = 6;
+      // The reason the key is invalid.
+      Reason reason = 7;
+   }
+
    // This is a user that has been added and has successfully changed
    // their password.
    message ActiveUser {

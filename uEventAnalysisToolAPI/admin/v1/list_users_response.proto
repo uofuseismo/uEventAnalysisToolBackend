@@ -1,5 +1,6 @@
 edition = "2023";
 import "google/protobuf/timestamp.proto";
+import "uEventAnalysisToolAPI/admin/v1/permission.proto";
 
 package UEventAnalysisToolAPI.Admin.V1;
 

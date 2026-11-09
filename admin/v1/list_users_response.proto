@@ -13,6 +13,14 @@ package UEventAnalysisToolAPI.Admin.V1;
  *    Dart:       hasLastLogin()
  */
 message ListUsersResponse {
+   // The key signature algorithm.
+   enum SignatureAlgorithm {
+      // Key signature algorithm unspecified. 
+      SIGNATURE_ALGORITHM_NOT_SPECIFIED = 0;
+      // Key signature algorithm is ed25519.
+      SIGNATURE_ALGORITHM_ED25519 = 1;
+   }
+
    // A user's access to one schema.  Every field is always set.
    message SchemaPermission {
       // The schema, e.g., utah, ynp, forge, etc.
@@ -27,19 +35,19 @@ message ListUsersResponse {
    message ActiveKey {
       // The user's label for the key, e.g., laptop.  Unique per user.
       string name = 1;
-      // The signature algorithm, e.g., ed25519.
-      string algorithm = 2;
       // SHA-256 fingerprint of the public key, e.g., SHA256:3q2+7w...
       // Enough to tell keys apart; the key itself is not sent.
-      string fingerprint = 3;
+      string fingerprint = 2;
       // When the key was registered.  ALWAYS SET.
-      google.protobuf.Timestamp created = 4;
+      google.protobuf.Timestamp registered = 3;
       // When the key stops working.  MAY BE UNSET: unset means it
       // never expires.  A time in the past means it has expired.
-      google.protobuf.Timestamp expires = 5;
+      google.protobuf.Timestamp expires = 4;
       // When the key was last used to log in.  MAY BE UNSET: unset
       // means it has never been used.
-      google.protobuf.Timestamp last_used = 6;
+      google.protobuf.Timestamp last_used = 5;
+      // The signature algorithm, e.g., ed25519.
+      SignatureAlgorithm algorithm = 6;
    }
 
    // A key that can no longer be used either because it has expired or
@@ -55,19 +63,19 @@ message ListUsersResponse {
       }
       // The user's label for the key, e.g., laptop.
       string name = 1;
-      // The signature algorithm, e.g., ed25519.
-      string algorithm = 2;
       // SHA-256 fingerprint of the public key.
-      string fingerprint = 3;
+      string fingerprint = 2;
       // When the key was registered.  ALWAYS SET.
-      google.protobuf.Timestamp created = 4;
+      google.protobuf.Timestamp registered = 3;
       // When the key was invalidated.  ALWAYS SET. 
       // Note, if a key expired and was then revoked then this
       // is when the key expired - i.e., the earlier of the two.
-      google.protobuf.Timestamp invalidated = 5;
+      google.protobuf.Timestamp invalidated = 4;
       // When the key was last used to log in.  MAY BE UNSET: unset
       // means it was never used.
-      google.protobuf.Timestamp last_used = 6;
+      google.protobuf.Timestamp last_used = 5;
+      // The signature algorithm, e.g., ed25519.
+      SignatureAlgorithm algorithm = 6;
       // The reason the key is invalid.
       Reason reason = 7;
    }

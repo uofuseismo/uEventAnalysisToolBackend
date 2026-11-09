@@ -318,6 +318,39 @@ ActiveKey::getLastUsed() const noexcept
     return pImpl->mLastUsed;
 }
 
+template<>
+UEATAPIV1::ListUsersResponse::ActiveKey
+ActiveKey::toMessage() const
+{
+    UEATAPIV1::ListUsersResponse::ActiveKey result;
+    result.set_name(getName());
+    auto algorithm = getAlgorithm(); 
+    if (permission == ActiveKey::Algorithm::ed25519)
+    {   
+        //result.set_algorithm(UEATAPIV1::KEY_ALGORITHM_ED25519);
+    }   
+    else
+    {   
+        throw std::runtime_error("Unhandled key algorithm");
+    }   
+    result.set_fingerprint(getFingerprint());
+    auto expiration = getExpiration();
+    if (expiration != std::nullopt)
+    {
+        *result.mutable_expires()
+            = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
+                  expiration->count());
+    }
+    auto lastUsed = getLastUsed();
+    if (lastUsed != std::nullopt)
+    {
+        *result.mutable_last_used()
+            = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
+                  lastUsed->count());
+    }
+    return result;
+}
+
 ///--------------------------------Revoked Key-------------------------------///
 class InactiveKey::InactiveKeyImpl
 {

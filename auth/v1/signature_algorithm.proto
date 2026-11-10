@@ -2,7 +2,6 @@ edition = "2023";
 
 package UEventAnalysisToolAPI.Auth.V1;
 
-
 // The key signing algorithm.
 enum SignatureAlgorithm {
    // Key signature algorithm is not set - this is not valid.

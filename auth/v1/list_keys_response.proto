@@ -3,7 +3,7 @@ import "google/protobuf/timestamp.proto";
 
 package UEventAnalysisToolAPI.Auth.V1;
 
-import "uEventAnalysisToolAPI/admin/v1/signature_algorithm.proto";
+import "uEventAnalysisToolAPI/auth/v1/signature_algorithm.proto";
 
 /**
  * A list of the user's keys.

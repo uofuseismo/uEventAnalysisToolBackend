@@ -8,12 +8,18 @@
 
 namespace UEventAnalysisToolAPI::Auth::V1
 {
+ class AddKeyRequest;
+ class AddKeyResponse;
  class ChangePasswordRequest;
  class ChangePasswordResponse;
+ class ListKeysRequest;
+ class ListKeysResponse;
  class LoginWithPasswordRequest;
  class LoginWithPasswordResponse;
  class GetPasswordRequirementsRequest;
  class PasswordRequirements;
+ class RevokeKeyRequest;
+ class RevokeKeyResponse;
 }
 
 namespace UEventAnalysisToolBackend::Auth
@@ -39,6 +45,12 @@ public:
                 std::shared_ptr<spdlog::logger> logger);
 
     grpc::ServerUnaryReactor
+        *LoginWithKey(
+            grpc::CallbackServerContext *context,
+            const UEventAnalysisToolAPI::Auth::V1::LoginWithKeyRequest *request,
+            UEventAnalysisToolAPI::Auth::V1::LoginWithKeyResponse *response) override;
+
+    grpc::ServerUnaryReactor
         *LoginWithPassword(
             grpc::CallbackServerContext *context,
             const UEventAnalysisToolAPI::Auth::V1::LoginWithPasswordRequest *request,
@@ -55,6 +67,27 @@ public:
             grpc::CallbackServerContext *context,
             const UEventAnalysisToolAPI::Auth::V1::GetPasswordRequirementsRequest *request,
             UEventAnalysisToolAPI::Auth::V1::PasswordRequirements *response) override;
+
+/*
+    grpc::ServerUnaryReactor
+        *AddKey(
+            grpc::CallbackServerContext *context,
+            const UEventAnalysisToolAPI::Auth::V1::AddKeyRequest *request,
+            UEventAnalysisToolAPI::Auth::V1::AddKeyResponse *response) override;
+
+    grpc::ServerUnaryReactor
+        *RevokeKey(
+            grpc::CallbackServerContext *context,
+            const UEventAnalysisToolAPI::Auth::V1::RevokeKeyRequest *request,
+            UEventAnalysisToolAPI::Auth::V1::RevokeKeyResponse *response) override;
+
+    grpc::ServerUnaryReactor
+        *ListKeys(
+            grpc::CallbackServerContext *context,
+            const UEventAnalysisToolAPI::Auth::V1::ListKeysRequest *request,
+            UEventAnalysisToolAPI::Auth::V1::ListKeysResponse *response) override;
+*/
+
 
     virtual ~AuthService();
 

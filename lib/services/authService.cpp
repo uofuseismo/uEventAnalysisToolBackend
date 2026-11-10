@@ -1,8 +1,10 @@
 #include <chrono>
+#include <exception>
 #include <memory>
 #include <optional>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 #include <spdlog/spdlog.h>
 #include <spdlog/logger.h>
 //NOLINTNEXTLINE(misc-include-cleaner)
@@ -10,6 +12,8 @@
 #include <grpcpp/server_context.h>
 #include <grpcpp/support/server_callback.h>
 #include <grpcpp/support/status.h>
+#include <jwt-cpp/jwt.h>
+#include <jwt-cpp/traits/boost-json/traits.h>
 #include "uEventAnalysisToolBackend/services/authService.hpp"
 #include "uEventAnalysisToolBackend/auth/authenticator.hpp"
 #include "uEventAnalysisToolBackend/auth/userLoginAuthority.hpp"
@@ -20,6 +24,8 @@
 #include <uEventAnalysisToolAPI/auth/v1/service.grpc.pb.h>
 #include <uEventAnalysisToolAPI/auth/v1/change_password_request.pb.h>
 #include <uEventAnalysisToolAPI/auth/v1/change_password_response.pb.h>
+#include <uEventAnalysisToolAPI/auth/v1/login_with_key_request.pb.h>
+#include <uEventAnalysisToolAPI/auth/v1/login_with_key_response.pb.h>
 #include <uEventAnalysisToolAPI/auth/v1/login_with_password_request.pb.h>
 #include <uEventAnalysisToolAPI/auth/v1/login_with_password_response.pb.h>
 #include <uEventAnalysisToolAPI/auth/v1/get_password_requirements_request.pb.h>
@@ -168,6 +174,13 @@ grpc::ServerUnaryReactor
                         requestIdentifier,
                         userNameAndPassword->first);
                 }
+                else
+                {
+                    SPDLOG_LOGGER_ERROR(mLogger,
+                        "Failed to process {}; {} not logged in; unhandled error code",
+                        requestIdentifier,
+                        userNameAndPassword->first);
+                }
                 //metrics.incrementServerErrorCounter(mRouteName);
                 Finish({grpc::StatusCode::INTERNAL,
                         "Server error during login - contact maintainer"});
@@ -177,8 +190,8 @@ grpc::ServerUnaryReactor
             mSuccess = true;
             SPDLOG_LOGGER_DEBUG(
                 mLogger,
-                "{} successfully logged in with password",
-                requestIdentifier);
+                "{}: {} successfully logged in with password",
+                requestIdentifier, userNameAndPassword->first);
             Finish(grpc::Status::OK);
         }
 
@@ -227,6 +240,177 @@ grpc::ServerUnaryReactor
                        pImpl->mLogger);
 
 }
+
+///---------------------------Login With Key-------------------------------///
+grpc::ServerUnaryReactor
+*AuthService::LoginWithKey(
+    grpc::CallbackServerContext *context,
+    const UEventAnalysisToolAPI::Auth::V1::LoginWithKeyRequest *request,
+    UEventAnalysisToolAPI::Auth::V1::LoginWithKeyResponse *response)
+{
+    namespace UAuthV1 = UEventAnalysisToolAPI::Auth::V1;
+    class Reactor : public grpc::ServerUnaryReactor
+    {   
+    public:
+        Reactor(UAuthV1::LoginWithKeyResponse *response,
+                grpc::CallbackServerContext *context,
+                const UAuthV1::LoginWithKeyRequest &request,
+                std::shared_ptr<UAuth::UserLoginAuthority> &loginAuthority,
+                std::shared_ptr<spdlog::logger> logger) :
+            mLogger(std::move(logger))
+        {
+            auto requestIdentifier = GRPC::toRequestIdentifier(*context);
+            if (!request.has_public_key())
+            {
+                //metrics.incrementUnauthenticated(mRouteName);
+                Finish({grpc::StatusCode::UNAUTHENTICATED,
+                        "Public key not provided"});
+                return;
+            }
+            if (request.public_key().empty())
+            {
+                //metrics.incrementUnauthenticated(mRouteName);
+                Finish({grpc::StatusCode::UNAUTHENTICATED,
+                        "Public key is empty"});
+                return;
+            }
+            if (!request.has_assertion())
+            {
+                //metrics.incrementUnauthenticated(mRouteName);
+                Finish({grpc::StatusCode::UNAUTHENTICATED,
+                        "Assertion not provided"});
+                return;
+            }
+            if (request.assertion().empty())
+            {
+                //metrics.incrementUnauthenticated(mRouteName);
+                Finish({grpc::StatusCode::UNAUTHENTICATED,
+                        "Assertion is empty"});
+                return;
+            }
+ 
+            const std::vector<unsigned char>
+                publicKey{request.public_key().data(),
+                          request.public_key().data()
+                        + request.public_key().size()};
+            auto loginResult
+                = loginAuthority->loginWithKey(publicKey,
+                                               request.assertion());
+            if (loginResult.has_value())
+            {
+                // Try to lift the user name from the token
+                std::string user;
+                try
+                {
+                    const auto decoded
+                        = jwt::decode<jwt::traits::boost_json> (*loginResult);
+                    if (decoded.has_subject()){user = decoded.get_subject();} 
+                }
+                catch (const std::exception &e)
+                {
+                    SPDLOG_LOGGER_WARN(mLogger,
+                        "{}: could not decode minted token because {}",
+                        requestIdentifier, e.what());
+                }
+
+                if (!user.empty())
+                {
+                    SPDLOG_LOGGER_INFO(mLogger,
+                        "{}: {} logged in",
+                        requestIdentifier, user);
+                }
+                else
+                {
+                    SPDLOG_LOGGER_INFO(mLogger,
+                        "{}: logged in user but could not determine name",
+                        requestIdentifier);
+                }
+                response->set_json_web_token(*loginResult);
+            }
+            else
+            {
+                if (loginResult.error() ==
+                    Auth::IAuthenticator::Result::InvalidCredentials)
+                {
+                    SPDLOG_LOGGER_WARN(mLogger,
+                        "{} rejected; invalid key credentials",
+                        requestIdentifier);
+                    //metrics.incrementUnauthenticatedCounter(mRouteName);
+                    Finish({grpc::StatusCode::UNAUTHENTICATED,
+                           "Invalid credentials"});
+                    return;
+                }
+                else if (loginResult.error() ==
+                         Auth::IAuthenticator::Result::ServerError)
+                {
+                    SPDLOG_LOGGER_ERROR(mLogger,
+                        "Failed to process {}; could not auth user with key",
+                        requestIdentifier);
+                }
+                else
+                {
+                    SPDLOG_LOGGER_ERROR(mLogger,
+                        "Failed to process {}; unhandled error code",
+                        requestIdentifier);
+                }
+                //metrics.incrementServerErrorCounter(mRouteName);
+                Finish({grpc::StatusCode::INTERNAL,
+                        "Server error during login - contact maintainer"});
+                return;
+            }
+            mSuccess = true;
+            SPDLOG_LOGGER_DEBUG(
+                mLogger,
+                "{}: successfully logged in with key",
+                requestIdentifier);
+            Finish(grpc::Status::OK);
+        }
+    private:
+        void OnDone() override
+        {
+            if (mLogger)
+            {
+                SPDLOG_LOGGER_DEBUG(mLogger,
+                                    "{} RPC completed", mRouteName);
+            }          
+            //auto &metrics = Metrics::Singleton::getInstance();
+            if (mSuccess)
+            {
+                //metrics.incrementSuccessCounter(mRouteName);
+                const auto endTime = std::chrono::steady_clock::now();
+                auto elapsedTime
+                    = std::chrono::duration<double>
+                      (endTime - mRPCStartTime);
+                //metrics.recordRouteDuration(elapsedTime, mRouteName);
+            }
+            delete this;
+        }
+
+        void OnCancel() override
+        {
+            if (mLogger)
+            {
+                SPDLOG_LOGGER_DEBUG(mLogger,
+                                    "{} RPC canceled", mRouteName);
+            }
+        }
+//private:
+        std::shared_ptr<spdlog::logger> mLogger{nullptr};
+        const std::chrono::time_point<std::chrono::steady_clock> mRPCStartTime
+        {
+            std::chrono::steady_clock::now()
+        };
+        const std::string mRouteName{"LoginWithKey"};
+        bool mSuccess{false};
+    };
+    return new Reactor(response,
+                       context,
+                       *request,
+                       pImpl->mLoginAuthority,
+                       pImpl->mLogger);
+
+}
+   
 
 ///------------------------------Change Password-----------------------------///
 grpc::ServerUnaryReactor

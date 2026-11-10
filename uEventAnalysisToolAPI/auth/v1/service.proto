@@ -2,14 +2,20 @@ edition = "2023";
 
 package UEventAnalysisToolAPI.Auth.V1;
 
+import "uEventAnalysisToolAPI/auth/v1/add_key_request.proto";
+import "uEventAnalysisToolAPI/auth/v1/add_key_response.proto";
 import "uEventAnalysisToolAPI/auth/v1/change_password_request.proto";
 import "uEventAnalysisToolAPI/auth/v1/change_password_response.proto";
+import "uEventAnalysisToolAPI/auth/v1/list_keys_request.proto";
+import "uEventAnalysisToolAPI/auth/v1/list_keys_response.proto";
 import "uEventAnalysisToolAPI/auth/v1/login_with_key_request.proto";
 import "uEventAnalysisToolAPI/auth/v1/login_with_key_response.proto";
 import "uEventAnalysisToolAPI/auth/v1/login_with_password_request.proto";
 import "uEventAnalysisToolAPI/auth/v1/login_with_password_response.proto";
 import "uEventAnalysisToolAPI/auth/v1/get_password_requirements_request.proto";
 import "uEventAnalysisToolAPI/auth/v1/password_requirements.proto";
+import "uEventAnalysisToolAPI/auth/v1/revoke_key_request.proto";
+import "uEventAnalysisToolAPI/auth/v1/revoke_key_response.proto";
 
 /**
  * Handles a basic login requests and credentials management for a user.
@@ -29,7 +35,13 @@ service AuthService {
    // Log-in with a key.  In this case the client will pass their key via
    // the message payload. 
    rpc LoginWithKey(LoginWithKeyRequest) returns(LoginWithKeyResponse) {};
-   // Allows the user to add a key.
-   //rpc AddKey(AddKeyRequest) returns(AddKeyResponse) {};
+   // Allows the user to add a key.  In this case, the client will pass their
+   // credentials in the HTTP Authorization: Basic field again so that a 
+   // hijacked token cannot allow another user to add additional keys.
+   rpc AddKey(AddKeyRequest) returns(AddKeyResponse) {};
+   // Allows the user to list their keys.
+   rpc ListKeys(ListKeysRequest) returns(ListRequestResponse) {};
+   // Allows the user to revoke a key.
+   rpc RevokeKey(RevokeKeyRequest) returns(RevokeKeyResponse) {};
 }
 

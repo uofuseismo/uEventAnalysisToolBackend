@@ -1,0 +1,73 @@
+edition = "2023";
+
+package UEventAnalysisToolAPI.Auth.V1;
+
+/**
+ * A list of the user's keys.
+ */
+message ListKeysRequest {
+   // The key signature algorithm.
+   enum SignatureAlgorithm {
+      // Key signature algorithm unspecified. 
+      SIGNATURE_ALGORITHM_NOT_SPECIFIED = 0;
+      // Key signature algorithm is ed25519.
+      SIGNATURE_ALGORITHM_ED25519 = 1;
+   }   
+
+   // A key the user may log in with.
+   message ActiveKey {
+      // The user's label for the key, e.g., laptop.  Unique per user.
+      string name = 1;
+      // SHA-256 fingerprint of the public key, e.g., SHA256:3q2+7w...
+      // Enough to tell keys apart; the key itself is not sent.
+      string fingerprint = 2;
+      // When the key was registered.  ALWAYS SET.
+      google.protobuf.Timestamp registered = 3;
+      // When the key stops working.  MAY BE UNSET: unset means it
+      // never expires.  A time in the past means it has expired.
+      google.protobuf.Timestamp expires = 4;
+      // When the key was last used to log in.  MAY BE UNSET: unset
+      // means it has never been used.
+      google.protobuf.Timestamp last_used = 5;
+      // The signature algorithm, e.g., ed25519.
+      SignatureAlgorithm algorithm = 6;
+   }
+
+   // A key that can no longer be used either because it has expired or
+   // because it was revoked.
+   message InactiveKey {
+      enum Reason {
+         // No reason provided as to why the key is invalid. 
+         REASON_NOT_SPECIFIED = 0;
+         // The key was revoked.
+         REASON_REVOKED = 1;
+         // The key has expired.
+         REASON_EXPIRED = 2;
+      }
+      // The user's label for the key, e.g., laptop.
+      string name = 1;
+      // SHA-256 fingerprint of the public key.
+      string fingerprint = 2;
+      // When the key was registered.  ALWAYS SET.
+      google.protobuf.Timestamp registered = 3;
+      // When the key was invalidated.  ALWAYS SET. 
+      // Note, if a key expired and was then revoked then this
+      // is when the key expired - i.e., the earlier of the two.
+      google.protobuf.Timestamp invalidated = 4;
+      // When the key was last used to log in.  MAY BE UNSET: unset
+      // means it was never used.
+      google.protobuf.Timestamp last_used = 5;
+      // The signature algorithm, e.g., ed25519.
+      SignatureAlgorithm algorithm = 6;
+      // The reason the key is invalid.
+      Reason reason = 7;
+   }
+
+   // The keys the user may log in with.  This can be empty.
+   repeated ActiveKey active_keys = 1;
+   // The keys the user may not longer log in with.  This can be empty.
+   repeated InactiveKey inactive_keys = 2;
+   // An additional message accompanying the gRPC return code.
+   string details = 3;
+}
+

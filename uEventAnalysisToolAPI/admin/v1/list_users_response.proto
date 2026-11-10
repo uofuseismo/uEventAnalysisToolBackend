@@ -31,7 +31,7 @@ message ListUsersResponse {
       google.protobuf.Timestamp granted = 3;
    }
 
-   // A key the user may log in with, unless it has expired.
+   // A key the user may log in with.
    message ActiveKey {
       // The user's label for the key, e.g., laptop.  Unique per user.
       string name = 1;

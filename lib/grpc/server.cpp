@@ -229,7 +229,7 @@ public:
             builder.RegisterService(service.second.get());
         }
         SPDLOG_LOGGER_INFO(mLogger,
-                           "Registered {} services.  Bind gRPC server to {}",
+                           "Registered {} services.  Bound gRPC server to {}",
                            mServicesMap.size(),
                            address);
         mServer = builder.BuildAndStart();

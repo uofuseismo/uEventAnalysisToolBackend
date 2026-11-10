@@ -1,0 +1,18 @@
+edition = "2023";
+
+package UEventAnalysisToolAPI.Auth.V1;
+
+/**
+ * Allows the user to add their PUBLIC key.  Their user name and password
+ * are specified in the in the Authorization header.
+ */
+message AddKeyRequest {
+  enum Algorithm {
+  }
+
+  // The name of the key - e.g., sams-laptop
+  string name = 1;
+  // The public key.
+  string public_key = 2;
+ 
+}

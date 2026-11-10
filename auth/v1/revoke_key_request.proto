@@ -1,0 +1,13 @@
+edition = "2023";
+
+package UEventAnalysisToolAPI.Auth.V1;
+
+/**
+ * Request a key be revoked by the user.
+ * The user's credentials are passed via the JWT in the Bearer header field.
+ */
+message RevokeKeyRequest {
+   // The name of the key to revoke.
+   string name = 1;
+}
+

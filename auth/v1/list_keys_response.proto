@@ -6,7 +6,7 @@ package UEventAnalysisToolAPI.Auth.V1;
 /**
  * A list of the user's keys.
  */
-message ListKeysRequest {
+message ListKeysResponse {
    // The key signature algorithm.
    enum SignatureAlgorithm {
       // Key signature algorithm unspecified. 

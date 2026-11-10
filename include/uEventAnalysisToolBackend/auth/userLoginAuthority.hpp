@@ -3,16 +3,20 @@
 #include <expected>
 #include <memory>
 #include <utility>
+#include <vector>
 #include <spdlog/logger.h>
 #include <uEventAnalysisToolBackend/auth/authenticator.hpp>
 namespace UEventAnalysisToolBackend::Auth
 {
+ class ActiveKey;
+ class InactiveKey;
  class UserLoginAuthorityOptions;
  namespace Password
  {
   class PasswordPolicy;
  }
 }
+
 namespace UEventAnalysisToolBackend::Auth
 {
 /// @class UserLoginAuthority userLoginAuthority.hpp
@@ -30,6 +34,20 @@ public:
         PasswordNeedsSpecialCharacter, /*!< The new password needs a new character. */
         PasswordTooLong, /*!< The new password is too long. */
         PasswordsMatch,  /*!< The new and old password match. */
+        ServerError
+    };
+
+    enum class KeyError
+    {
+        Unauthenticated,        /*!< Bad user name or password (add only). */
+        PasswordChangeRequired, /*!< User still holds an issued password. */
+        InvalidName,            /*!< Key name is empty or malformed. */
+        InvalidKey,             /*!< Not a 32-byte ed25519 key, or the proof
+                                     of possession failed. */
+        InvalidExpiration,      /*!< Expiration is in the past or too far out. */
+        NameInUse,              /*!< The user already has a key by this name. */
+        KeyInUse,               /*!< This public key is already registered. */
+        NoKeyFound,             /*!< No active key by this name (revoke only). */
         ServerError
     };
 public:
@@ -68,6 +86,42 @@ public:
     [[nodiscard]] std::expected<std::string, IAuthenticator::Result>
         loginWithKey(const std::vector<unsigned char> &publicKey,
                      const std::string &assertion) const;
+
+    /// @brief Registers a key.  The password is demanded because a key
+    ///        outlives a password.
+    /// @param[in] userNameAndPassword  The user's current credentials.
+    /// @param[in] keyName     The user's label - e.g., laptop.
+    /// @param[in] publicKey   The raw 32-byte ed25519 public key.
+    /// @param[in] assertion   A JWS signed by the new key's private half,
+    ///                        proving the caller holds it.
+    /// @param[in] expiresAfter  If set, the key stops working this long
+    ///                          from now.
+    [[nodiscard]] auto addKey(
+        const std::pair<std::string, std::string> &userNameAndPassword,
+        const std::string &keyName,
+        const std::vector<unsigned char> &publicKey,
+        const std::string &assertion,
+        const std::optional<std::chrono::seconds> &expiresAfter)
+        -> std::expected<void, KeyError>;
+
+    /// @param[in] user  The user who is requesting their claims.  
+    /// @result The keys (active and inactive) owned by this user.
+    [[nodiscard]] auto listKeys(const std::string &user) const
+        -> std::expected
+           <
+              std::pair
+              <
+                 std::vector<ActiveKey>,
+                 std::vector<InactiveKey>
+              >,
+              KeyError
+           >;
+
+    /// @param[in] user     From a verified token's claims - never the request.
+    /// @param[in] keyName  The key to revoke.
+    [[nodiscard]] auto revokeKey(const std::string &user,
+                                 const std::string &keyName)
+        -> std::expected<void, KeyError>;
 
     /// @brief Checks a password without minting a token.  This is for
     ///        changing a password and changing a key which demand the

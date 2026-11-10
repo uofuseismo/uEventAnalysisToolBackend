@@ -273,11 +273,13 @@ CREATE TABLE auth.user_keys(
     user_id BIGINT NOT NULL
         REFERENCES auth.users(user_id) ON DELETE CASCADE,
     --- User-facing label, e.g., 'laptop', 'ci-runner'.  Unique per
-    --- user so 'revoke my laptop key' is unambiguous.
-    key_name TEXT NOT NULL CHECK (length(key_name) > 0),
+    --- user so 'revoke my laptop key' is unambiguous.  It reaches logs
+    --- and screens, so it takes the user-name characters, lowercase.
+    key_name TEXT NOT NULL CHECK (key_name ~ '^[a-z0-9._@-]{1,64}$'),
     --- The public key, e.g., base64 of libsodium crypto_sign_PUBLICKEYBYTES.
     --- Globally unique: one key must not identify two users.
-    public_key TEXT UNIQUE NOT NULL CHECK (length(public_key) > 0),
+    public_key TEXT NOT NULL CHECK (length(public_key) > 0)
+        CONSTRAINT user_keys_public_key_key UNIQUE,
     --- Recorded so a future algorithm migration is data, not archaeology.
     algorithm TEXT NOT NULL DEFAULT 'ed25519'
         CHECK (algorithm = lower(algorithm)),
@@ -293,33 +295,56 @@ CREATE TABLE auth.user_keys(
     --- which, if either, has happened.
     revoked TIMESTAMPTZ DEFAULT NULL,
     last_used TIMESTAMPTZ DEFAULT NULL,
-    UNIQUE (user_id, key_name),
+    --- add_user_key tells the two UNIQUE failures apart by these names.
+    CONSTRAINT user_keys_user_id_key_name_key UNIQUE (user_id, key_name),
     CHECK (auth.is_valid_public_key(public_key, algorithm))
 );
 CREATE INDEX user_keys_user_id_idx ON auth.user_keys(user_id);
 
---- Registers a public key for a user.  Returns TRUE on success; FALSE
---- if the user doesn't exist, inputs are empty, the key name is taken
---- for this user, the public key is already registered (to anyone),
---- the key is not one auth.is_valid_public_key accepts, or p_expires
---- is not in the future.
+--- Registers a public key for a user.  Returns TRUE on success and
+--- FALSE only if the user doesn't exist.  Every other refusal RAISES,
+--- with an SQLSTATE the backend can map to an answer for the user:
 ---
---- RAISES insufficient_privilege (42501) if the user holds an issued
---- password.  A key outlives every password, so registering one is
---- the step that would turn an e-mailed password -- or a stolen one
---- that an administrator has since reset -- into permanent access.
---- Raised rather than FALSE so the backend can tell 'you may not yet'
---- from 'that did not work'.
+---   invalid_parameter_value (22023)  the key name breaks the naming
+---       rule, the key is not one auth.is_valid_public_key accepts, or
+---       p_expires is not in the future.  The message begins 'invalid
+---       key name', 'invalid public key' or 'invalid expiration'.
+---   duplicate_object (42710)  this user already has a key by this
+---       name -- revoked ones included, since the row stays for audit.
+---   unique_violation (23505)  the public key is registered already,
+---       to anyone.  Only someone who proved they hold the private key
+---       should be told this; see the backend's addKey.
+---   insufficient_privilege (42501)  the user holds an issued
+---       password.  A key outlives every password, so registering one
+---       is the step that would turn an e-mailed password -- or a
+---       stolen one that an administrator has since reset -- into
+---       permanent access.
+---
+--- The key name is trimmed and lowercased, like a user name.
 CREATE OR REPLACE FUNCTION auth.add_user_key(
     p_name TEXT, p_key_name TEXT, p_public_key TEXT,
     p_algorithm TEXT DEFAULT 'ed25519', p_expires TIMESTAMPTZ DEFAULT NULL)
 RETURNS BOOLEAN AS $$
 DECLARE v_user_id BIGINT;
         v_provisional TIMESTAMPTZ;
+        v_key_name TEXT := lower(trim(p_key_name));
+        v_public_key TEXT := trim(p_public_key);
+        v_algorithm TEXT := lower(trim(p_algorithm));
+        v_constraint TEXT;
 BEGIN
-    IF p_key_name IS NULL OR length(trim(p_key_name)) = 0 OR
-       p_public_key IS NULL OR length(trim(p_public_key)) = 0 THEN
-        RETURN FALSE;
+    IF v_key_name IS NULL OR v_key_name !~ '^[a-z0-9._@-]{1,64}$' THEN
+        RAISE EXCEPTION 'invalid key name'
+              USING ERRCODE = 'invalid_parameter_value',
+                    HINT = 'Use 1 to 64 of a-z, 0-9, ., _, @ and -.';
+    END IF;
+    IF NOT COALESCE(auth.is_valid_public_key(v_public_key, v_algorithm),
+                    FALSE) THEN
+        RAISE EXCEPTION 'invalid public key'
+              USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    IF p_expires IS NOT NULL AND p_expires <= NOW() THEN
+        RAISE EXCEPTION 'invalid expiration: not in the future'
+              USING ERRCODE = 'invalid_parameter_value';
     END IF;
     SELECT user_id, provisional_until INTO v_user_id, v_provisional
       FROM auth.users WHERE name = lower(trim(p_name));
@@ -330,13 +355,30 @@ BEGIN
         RAISE EXCEPTION 'password change required before adding a key'
               USING ERRCODE = 'insufficient_privilege';
     END IF;
-    INSERT INTO auth.user_keys
-        (user_id, key_name, public_key, algorithm, expires)
-        VALUES (v_user_id, trim(p_key_name), trim(p_public_key),
-                lower(trim(p_algorithm)), p_expires);
+    --- Checked first because, when both clash, the name is the answer to
+    --- give: it is the user's own and says nothing about anyone else's
+    --- keys.  The INSERT would report the key, as Postgres checks that
+    --- index first.  The handler below still catches a concurrent add.
+    IF EXISTS (SELECT 1 FROM auth.user_keys
+                WHERE user_id = v_user_id AND key_name = v_key_name) THEN
+        RAISE EXCEPTION 'key name already in use'
+              USING ERRCODE = 'duplicate_object';
+    END IF;
+    BEGIN
+        INSERT INTO auth.user_keys
+            (user_id, key_name, public_key, algorithm, expires)
+            VALUES (v_user_id, v_key_name, v_public_key, v_algorithm,
+                    p_expires);
+    EXCEPTION WHEN unique_violation THEN
+        GET STACKED DIAGNOSTICS v_constraint = CONSTRAINT_NAME;
+        IF v_constraint = 'user_keys_user_id_key_name_key' THEN
+            RAISE EXCEPTION 'key name already in use'
+                  USING ERRCODE = 'duplicate_object';
+        END IF;
+        RAISE EXCEPTION 'public key already registered'
+              USING ERRCODE = 'unique_violation';
+    END;
     RETURN TRUE;
-EXCEPTION WHEN unique_violation OR check_violation THEN
-    RETURN FALSE;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -351,7 +393,7 @@ BEGIN
       FROM auth.users u
      WHERE k.user_id = u.user_id
        AND u.name = lower(trim(p_name))
-       AND k.key_name = trim(p_key_name)
+       AND k.key_name = lower(trim(p_key_name))
        AND k.revoked IS NULL;
     GET DIAGNOSTICS n_updated = ROW_COUNT;
     RETURN n_updated > 0;

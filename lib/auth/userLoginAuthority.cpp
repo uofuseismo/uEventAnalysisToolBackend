@@ -26,6 +26,7 @@
 #include "uEventAnalysisToolBackend/auth/password/hasher.hpp"
 #include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
+#include "uEventAnalysisToolBackend/auth/userList.hpp"
 #include "databaseUtilities.hpp"
 
 using namespace UEventAnalysisToolBackend::Auth;
@@ -453,6 +454,30 @@ public:
                 if (row.at(0).is_null()){return std::nullopt;}
                 return row[0].as<bool> ();
             });
+    }
+
+    // @result True indicates success.  False indicates the user is unknown.
+    [[nodiscard]] bool addUserKey(const std::string &user,
+                                  const std::string &keyName,
+                                  const std::string &publicKey,
+                                  const std::chrono::microseconds &expiration)
+    {
+        constexpr std::string_view query{"SELECT auth.add_user_key($1, $2, $3, $4, $5)"};
+        const pqxx::params parameters{user, keyName, publicKey,
+                                      "ed25519",
+                                      expiration.count()};
+        return withTransaction<pqxx::work>(
+            [&](pqxx::work &transaction) -> bool
+            {
+                auto row = transaction.exec(query, parameters).one_row();
+                const auto success = row.at(0).as<bool> ();
+                // Without the commit the last_login update rolls back on
+                // the transaction's destruction.
+                transaction.commit();
+                return success;
+            });                   
+
+
     }
 
     // @result The key owner (user) name if the key is active (i.e., exists and
@@ -909,6 +934,139 @@ UserLoginAuthority::verifyPassword(
     return std::unexpected(IAuthenticator::Result::ServerError);
 }
 
+/// Add a key
+std::expected<void, UserLoginAuthority::KeyError>
+UserLoginAuthority::addKey(
+    const std::pair<std::string, std::string> &userNameAndPassword,
+    const std::string &keyName,
+    const std::vector<unsigned char> &publicKey,
+    const std::string &assertion,
+    const std::optional<std::chrono::seconds> &expiresAfter)
+{
+    if (!isInitialized())
+    {    
+        SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+                            "UserLoginAuthority not initialized");
+        return std::unexpected(
+           UserLoginAuthority::KeyError::ServerError);
+    } 
+    // Step 1: Authenticated?
+    auto verificationResult = verifyPassword(userNameAndPassword);
+    if (!verificationResult.has_value())
+    {
+        if (verificationResult.error() ==
+            IAuthenticator::Result::InvalidCredentials)
+        {
+            return std::unexpected(
+               UserLoginAuthority::KeyError::Unauthenticated);
+        }
+        else if (verificationResult.error() ==
+                 IAuthenticator::Result::ServerError)
+        {
+            return std::unexpected(UserLoginAuthority::KeyError::ServerError);
+        }
+        SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+            "UserLoginAuthority could not classify verify password result");
+        return std::unexpected(UserLoginAuthority::KeyError::ServerError);
+    }
+    // Step 2: Verify signature (touch database above) 
+    if (!::verifyAssertionSignature(publicKey, assertion))
+    {
+        SPDLOG_LOGGER_WARN(pImpl->mLogger,
+                           "Rejecting proposed key; bad signature");
+        return std::unexpected(UserLoginAuthority::KeyError::InvalidKey);
+    }
+    // Step 3: Check the claims - alg(orithm) is eddsa, aud(ience) is issuer,
+    //         and now the time is within in a minute to ensure this is
+    //         short-lived
+    const auto claims
+        = ::parseAssertion(assertion,
+                           std::chrono::system_clock::now(),
+                           pImpl->mOptions.getIssuer());
+    if (claims == std::nullopt)
+    {
+        SPDLOG_LOGGER_WARN(pImpl->mLogger,
+                           "Rejecting key login; bad or expired assertion");
+        return std::unexpected(UserLoginAuthority::KeyError::InvalidKey);
+    }
+    if (claims->subject != userNameAndPassword.first)
+    {
+        SPDLOG_LOGGER_WARN(pImpl->mLogger,
+                           "Claim does not belong to this user");
+        return std::unexpected(UserLoginAuthority::KeyError::InvalidKey);
+    }
+    // Step 4: Add to database
+    try
+    {
+/*
+        std::chrono::seconds expires;
+        pImpl->addUserKey(userNameAndPassword.first,
+                          publicKey,
+                          assertion,
+                          expires);
+*/
+    }
+    catch (const pqxx::insufficient_privilege &)
+    {
+        return std::unexpected(KeyError::PasswordChangeRequired);
+    }
+    catch (const pqxx::unique_violation &)
+    {
+        return std::unexpected(KeyError::KeyInUse);
+    }
+    catch (const pqxx::sql_error &e)
+    {
+        const std::string_view message{e.what()};
+        if (e.sqlstate() == "42710")
+        {
+            return std::unexpected(KeyError::NameInUse);
+        }
+        if (e.sqlstate() == "22023")
+        {
+            if (message.find("invalid key name") != std::string_view::npos)
+            {
+                return std::unexpected(KeyError::InvalidName);
+            }
+            if (message.find("invalid expiration") != std::string_view::npos)
+            {
+                return std::unexpected(KeyError::InvalidExpiration);
+            }
+            return std::unexpected(KeyError::InvalidKey);
+        }
+        SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+                            "Failed to add key because {}",
+                            e.what());
+        return std::unexpected(KeyError::ServerError);
+    }
+    catch (const std::exception &e)
+    {
+        SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+                            "Failed to add key - unhandled exception {}",
+                            e.what());
+        return std::unexpected(KeyError::ServerError);
+    }
+    return {};
+}
+
+/// Change the user name and password
+std::expected<void, UserLoginAuthority::KeyError>
+UserLoginAuthority::revokeKey(
+    const std::string &user,
+    const std::string &keyName)
+{
+    if (!isInitialized())
+    {    
+        SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+                            "UserLoginAuthority not initialized");
+        return std::unexpected(
+           UserLoginAuthority::KeyError::ServerError);
+    }
+    if (keyName.empty())
+    {
+        return std::unexpected(
+           UserLoginAuthority::KeyError::NoKeyFound);
+    } 
+}
 
 /// Destructor
 UserLoginAuthority::~UserLoginAuthority() = default;

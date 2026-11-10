@@ -897,36 +897,91 @@ END $$;
 
 SELECT auth.admin_add_user('root', 'lister', 'hash-lister');
 
+--- Each refusal raises its own SQLSTATE, so the backend can say which
+--- thing was wrong.  Matched on the message too: 22023 covers three
+--- different mistakes.
 DO $$
 DECLARE v_key TEXT := encode(sha256('pk-lister-shape'), 'base64');
+        v_state TEXT;
+        v_message TEXT;
+        r RECORD;
 BEGIN
-    IF auth.add_user_key('lister', 'garbage', 'not base64!') THEN
-        RAISE EXCEPTION 'FAIL: registered a key that is not base64';
-    END IF;
-    IF auth.add_user_key('lister', 'short',
-                         encode(substr(sha256('pk-x'), 1, 31), 'base64')) THEN
-        RAISE EXCEPTION 'FAIL: registered a 31-byte ed25519 key';
-    END IF;
-    IF auth.add_user_key('lister', 'long',
-                         encode(sha256('pk-x') || '\x00'::bytea, 'base64')) THEN
-        RAISE EXCEPTION 'FAIL: registered a 33-byte ed25519 key';
-    END IF;
-    --- The same 32 bytes spelled differently must not get past UNIQUE.
-    IF auth.add_user_key('lister', 'unpadded', rtrim(v_key, '=')) THEN
-        RAISE EXCEPTION 'FAIL: registered an unpadded key';
-    END IF;
-    IF auth.add_user_key('lister', 'wrapped',
-                         substr(v_key, 1, 20) || E'\n' || substr(v_key, 21)) THEN
-        RAISE EXCEPTION 'FAIL: registered a key with a newline inside it';
-    END IF;
-    IF auth.add_user_key('lister', 'rsa', v_key, 'rsa') THEN
-        RAISE EXCEPTION 'FAIL: registered a key for an unsupported algorithm';
-    END IF;
-    IF auth.add_user_key('lister', 'stale', v_key, 'ed25519',
-                         NOW() - INTERVAL '1 second')
-       OR auth.add_user_key('lister', 'stale', v_key, 'ed25519', NOW()) THEN
-        RAISE EXCEPTION 'FAIL: registered a key that had already expired';
-    END IF;
+    FOR r IN SELECT * FROM (VALUES
+        ('not base64',
+         format('SELECT auth.add_user_key(%L, %L, %L)',
+                'lister', 'garbage', 'not base64!'),
+         '22023', 'invalid public key%'),
+        ('a 31-byte key',
+         format('SELECT auth.add_user_key(%L, %L, %L)', 'lister', 'short',
+                encode(substr(sha256('pk-x'), 1, 31), 'base64')),
+         '22023', 'invalid public key%'),
+        ('a 33-byte key',
+         format('SELECT auth.add_user_key(%L, %L, %L)', 'lister', 'long',
+                encode(sha256('pk-x') || '\x00'::bytea, 'base64')),
+         '22023', 'invalid public key%'),
+        --- The same 32 bytes spelled differently must not get past UNIQUE.
+        ('an unpadded key',
+         format('SELECT auth.add_user_key(%L, %L, %L)', 'lister', 'unpadded',
+                rtrim(v_key, '=')),
+         '22023', 'invalid public key%'),
+        ('a key with a newline inside it',
+         format('SELECT auth.add_user_key(%L, %L, %L)', 'lister', 'wrapped',
+                substr(v_key, 1, 20) || E'\n' || substr(v_key, 21)),
+         '22023', 'invalid public key%'),
+        ('a NULL key',
+         format('SELECT auth.add_user_key(%L, %L, NULL)', 'lister', 'null-key'),
+         '22023', 'invalid public key%'),
+        ('an unsupported algorithm',
+         format('SELECT auth.add_user_key(%L, %L, %L, %L)',
+                'lister', 'rsa', v_key, 'rsa'),
+         '22023', 'invalid public key%'),
+        ('a NULL algorithm',
+         format('SELECT auth.add_user_key(%L, %L, %L, NULL)',
+                'lister', 'no-algorithm', v_key),
+         '22023', 'invalid public key%'),
+        ('a key that had already expired',
+         format('SELECT auth.add_user_key(%L, %L, %L, %L, %L)', 'lister',
+                'stale', v_key, 'ed25519', NOW() - INTERVAL '1 second'),
+         '22023', 'invalid expiration%'),
+        --- EXECUTE shares the block's transaction, so NOW() is the same.
+        ('a key that expires now',
+         format('SELECT auth.add_user_key(%L, %L, %L, %L, NOW())',
+                'lister', 'stale', v_key, 'ed25519'),
+         '22023', 'invalid expiration%'),
+        ('an empty key name',
+         format('SELECT auth.add_user_key(%L, %L, %L)', 'lister', '', v_key),
+         '22023', 'invalid key name%'),
+        ('a blank key name',
+         format('SELECT auth.add_user_key(%L, %L, %L)', 'lister', '   ', v_key),
+         '22023', 'invalid key name%'),
+        ('a NULL key name',
+         format('SELECT auth.add_user_key(%L, NULL, %L)', 'lister', v_key),
+         '22023', 'invalid key name%'),
+        ('a key name with a space in it',
+         format('SELECT auth.add_user_key(%L, %L, %L)',
+                'lister', 'my laptop', v_key),
+         '22023', 'invalid key name%'),
+        ('a key name with markup in it',
+         format('SELECT auth.add_user_key(%L, %L, %L)',
+                'lister', '<b>laptop</b>', v_key),
+         '22023', 'invalid key name%'),
+        ('a 65-character key name',
+         format('SELECT auth.add_user_key(%L, %L, %L)',
+                'lister', repeat('k', 65), v_key),
+         '22023', 'invalid key name%')
+        ) AS t(label, call, state, message) LOOP
+        BEGIN
+            EXECUTE r.call;
+            RAISE EXCEPTION 'FAIL: registered %', r.label;
+        EXCEPTION WHEN OTHERS THEN
+            GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE,
+                                    v_message = MESSAGE_TEXT;
+            IF v_state <> r.state OR v_message NOT LIKE r.message THEN
+                RAISE EXCEPTION 'FAIL: % raised % "%", expected % "%"',
+                    r.label, v_state, v_message, r.state, r.message;
+            END IF;
+        END;
+    END LOOP;
     IF EXISTS (SELECT 1 FROM auth.list_user_keys('lister')) THEN
         RAISE EXCEPTION 'FAIL: a refused key left a row';
     END IF;
@@ -938,6 +993,109 @@ BEGIN
         RAISE EXCEPTION 'FAIL: the well-formed key does not resolve';
     END IF;
     RAISE NOTICE 'ok: only verifiable keys are registered';
+END $$;
+
+--- Clashes, on a user of their own so the listings below stay exact.
+SELECT auth.admin_add_user('root', 'keyring', 'hash-keyring');
+
+DO $$
+DECLARE v_key TEXT := encode(sha256('pk-keyring-laptop'), 'base64');
+        v_state TEXT;
+        v_message TEXT;
+        r RECORD;
+BEGIN
+    IF NOT auth.add_user_key('keyring', 'laptop', v_key) THEN
+        RAISE EXCEPTION 'FAIL: keyring could not add a key';
+    END IF;
+    IF NOT auth.add_user_key('keyring', 'old',
+                             encode(sha256('pk-keyring-old'), 'base64')) THEN
+        RAISE EXCEPTION 'FAIL: keyring could not add a second key';
+    END IF;
+    IF NOT auth.revoke_user_key('keyring', 'old') THEN
+        RAISE EXCEPTION 'FAIL: keyring could not revoke a key';
+    END IF;
+    FOR r IN SELECT * FROM (VALUES
+        ('a key name the user has',
+         format('SELECT auth.add_user_key(%L, %L, %L)', 'keyring', 'laptop',
+                encode(sha256('pk-keyring-laptop2'), 'base64')),
+         '42710', 'key name already in use%'),
+        --- Names are compared the way they are stored.
+        ('a key name the user has, in other case',
+         format('SELECT auth.add_user_key(%L, %L, %L)', 'keyring', ' LAPTOP ',
+                encode(sha256('pk-keyring-laptop3'), 'base64')),
+         '42710', 'key name already in use%'),
+        --- A revoked key's row stays for audit, and so does its name.
+        ('the name of a revoked key',
+         format('SELECT auth.add_user_key(%L, %L, %L)', 'keyring', 'old',
+                encode(sha256('pk-keyring-old2'), 'base64')),
+         '42710', 'key name already in use%'),
+        ('a key the user has, under a new name',
+         format('SELECT auth.add_user_key(%L, %L, %L)',
+                'keyring', 'desktop', v_key),
+         '23505', 'public key already registered%'),
+        ('a key someone else has',
+         format('SELECT auth.add_user_key(%L, %L, %L)',
+                'root', 'borrowed', v_key),
+         '23505', 'public key already registered%'),
+        --- Revoking does not free the key: it stays tied to its owner.
+        ('a revoked key',
+         format('SELECT auth.add_user_key(%L, %L, %L)', 'root', 'secondhand',
+                encode(sha256('pk-keyring-old'), 'base64')),
+         '23505', 'public key already registered%'),
+        --- Both clash at once; the name is the user's own mistake.
+        ('a clashing name and a clashing key',
+         format('SELECT auth.add_user_key(%L, %L, %L)',
+                'keyring', 'laptop', v_key),
+         '42710', 'key name already in use%')
+        ) AS t(label, call, state, message) LOOP
+        BEGIN
+            EXECUTE r.call;
+            RAISE EXCEPTION 'FAIL: registered %', r.label;
+        EXCEPTION WHEN OTHERS THEN
+            GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE,
+                                    v_message = MESSAGE_TEXT;
+            IF v_state <> r.state OR v_message NOT LIKE r.message THEN
+                RAISE EXCEPTION 'FAIL: % raised % "%", expected % "%"',
+                    r.label, v_state, v_message, r.state, r.message;
+            END IF;
+        END;
+    END LOOP;
+    IF (SELECT count(*) FROM auth.list_user_keys('keyring')) <> 2
+       OR EXISTS (SELECT 1 FROM auth.list_user_keys('root')) THEN
+        RAISE EXCEPTION 'FAIL: a refused clash left a row';
+    END IF;
+    --- An unknown user is the one FALSE.
+    IF auth.add_user_key('no-such-user', 'laptop',
+                         encode(sha256('pk-no-such-user'), 'base64')) THEN
+        RAISE EXCEPTION 'FAIL: registered a key for a user who does not exist';
+    END IF;
+    --- Names are stored trimmed and lowercased, and revoked the same way.
+    IF NOT auth.add_user_key('keyring', ' Work-Laptop ',
+                             encode(sha256('pk-keyring-work'), 'base64')) THEN
+        RAISE EXCEPTION 'FAIL: refused a mixed-case key name';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM auth.list_user_keys('keyring')
+                    WHERE key_name = 'work-laptop') THEN
+        RAISE EXCEPTION 'FAIL: the key name was not normalized';
+    END IF;
+    IF NOT auth.revoke_user_key('keyring', ' WORK-LAPTOP ') THEN
+        RAISE EXCEPTION 'FAIL: could not revoke by the name as typed';
+    END IF;
+    IF auth.revoke_user_key('keyring', 'work-laptop') THEN
+        RAISE EXCEPTION 'FAIL: revoked the same key twice';
+    END IF;
+    --- The longest legal name, so the limit is 64 and not less.
+    IF NOT auth.add_user_key('keyring', repeat('k', 64),
+                             encode(sha256('pk-keyring-long-name'), 'base64')) THEN
+        RAISE EXCEPTION 'FAIL: refused a 64-character key name';
+    END IF;
+    IF NOT auth.revoke_user_key('keyring', repeat('k', 64)) THEN
+        RAISE EXCEPTION 'FAIL: could not revoke the 64-character key';
+    END IF;
+    IF NOT auth.admin_remove_user('root', 'keyring') THEN
+        RAISE EXCEPTION 'FAIL: could not remove keyring';
+    END IF;
+    RAISE NOTICE 'ok: each clash is reported as itself';
 END $$;
 
 --- The fingerprint is pinned to an outside computation, so a change of

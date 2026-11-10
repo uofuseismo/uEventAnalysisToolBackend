@@ -27,6 +27,8 @@ public:
     std::pair<std::string, std::string> mKeyPair;
     std::string mIssuer;
     std::chrono::seconds mTimeToLive{0};
+    std::chrono::seconds mLoginKeyTimeToLive{std::chrono::days {365}};
+    int mMaximumNumberOfLoginKeys{10};
     Algorithm mAlgorithm;
     bool mHasDatabaseCredentials{false};
     bool mHasKeyPairAndAlgorithm{false};
@@ -234,6 +236,42 @@ bool UserLoginAuthorityOptions::hasIssuer() const noexcept
     return !pImpl->mIssuer.empty();
 }
 
+/// Login key
+void UserLoginAuthorityOptions::setMaximumNumberOfLoginKeys(
+    int maximumNumberOfKeys)
+{
+    if (maximumNumberOfKeys < 1)
+    {
+        throw std::invalid_argument(
+           "Maximum number of login keys must be positive");
+    }
+    pImpl->mMaximumNumberOfLoginKeys = maximumNumberOfKeys;
+}
+
+int UserLoginAuthorityOptions::getMaximumNumberOfLoginKeys() const noexcept
+{
+    return pImpl->mMaximumNumberOfLoginKeys;
+}
+
+// Login key TTL
+void UserLoginAuthorityOptions::setMaximumLoginKeyTimeToLive(
+    const std::chrono::seconds &timeToLive)
+{
+    if (static_cast<int> (timeToLive.count()) < 1)
+    {
+        throw std::invalid_argument(
+           "Login key time to live must be positive");
+    }   
+    pImpl->mLoginKeyTimeToLive = timeToLive;
+}
+
+std::chrono::seconds 
+UserLoginAuthorityOptions::getMaximumLoginKeyTimeToLive() const noexcept
+{
+    return pImpl->mLoginKeyTimeToLive;
+}
+
+
 ///--------------------------------------------------------------------------///
 ///                         Build from ini file                              ///
 ///--------------------------------------------------------------------------///
@@ -404,7 +442,22 @@ UserLoginAuthorityOptions UserLoginAuthorityOptions::fromInitializationFile(
                                     + privateKeyFile + ")");
             result.setKeyPairAndAlgorithm(
                 std::pair {publicKeyText, privateKeyText}, algorithm);
-       }
+        }
     }
+
+    int loginKeyTimeToLiveInDays{365};
+    loginKeyTimeToLiveInDays
+        = propertyTree.get<int> (
+            section + "loginKeyTimeToMaximumTimeLiveInDays",
+            loginKeyTimeToLiveInDays);
+    result.setMaximumLoginKeyTimeToLive(
+        std::chrono::days {loginKeyTimeToLiveInDays});
+
+    auto maxNumberOfLoginKeys
+        = propertyTree.get<int> (
+            section + "maximumNumberOfLoginKeys",
+            result.getMaximumNumberOfLoginKeys());
+    result.setMaximumNumberOfLoginKeys(maxNumberOfLoginKeys);
+
     return result;
 }

@@ -460,21 +460,21 @@ public:
     [[nodiscard]] bool addUserKey(const std::string &user,
                                   const std::string &keyName,
                                   const std::string &publicKey,
-                                  const std::chrono::microseconds &expiration)
+                                  const std::chrono::seconds &expiresAfter)
     {
-        constexpr std::string_view query{"SELECT auth.add_user_key($1, $2, $3, $4, $5)"};
+          
+        constexpr std::string_view query{
+           "SELECT auth.add_user_key($1, $2, $3, $4, NOW() + make_interval(secs => $5))"};
         const pqxx::params parameters{user, keyName, publicKey,
                                       "ed25519",
-                                      expiration.count()};
+                                      expiresAfter.count()};
         return withTransaction<pqxx::work>(
             [&](pqxx::work &transaction) -> bool
             {
                 auto row = transaction.exec(query, parameters).one_row();
-                const auto success = row.at(0).as<bool> ();
-                // Without the commit the last_login update rolls back on
-                // the transaction's destruction.
+                const auto added = row.at(0).as<bool> ();
                 transaction.commit();
-                return success;
+                return added;
             });                   
 
 

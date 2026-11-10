@@ -100,6 +100,20 @@ public:
     /// @result True indicates that the token time to live was set. 
     [[nodiscard]] bool hasTimeToLive() const noexcept;
 
+    /// @brief Sets the maxmimum number of login keys a user may have.
+    /// @throws std::invalid_argument if the number of keys is not positive.
+    void setMaximumNumberOfLoginKeys(int maximumNumberOfKeys);
+    /// @result The maximum number of keys a user may have.  
+    /// @note By default this is 10.
+    [[nodiscard]] int getMaximumNumberOfLoginKeys() const noexcept;
+
+    /// @brief Sets the maxmimum length a login key can live.
+    /// @throws std::invalid_argument if the maximum time to live is not positive.
+    void setMaximumLoginKeyTimeToLive(const std::chrono::seconds &timeToLive);
+    /// @result The maximum login key time to live.  By default this is
+    ///         one year.
+    [[nodiscard]] std::chrono::seconds getMaximumLoginKeyTimeToLive() const noexcept;
+
     /// @brief Destructor.
     ~UserLoginAuthorityOptions();
 

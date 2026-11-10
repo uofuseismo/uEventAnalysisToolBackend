@@ -1,6 +1,7 @@
 #include <chrono>
 #include <memory>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -80,6 +81,48 @@ void checkInactiveKey(const InactiveKey &key)
     }
 }
 
+void checkActiveUser(const ActiveUser &user)
+{
+    if (!user.hasName()){throw std::invalid_argument("User name not set");}
+    if (!user.wasIsAdministratorSet())
+    {
+        throw std::invalid_argument("User admin status not set");
+    }
+    if (!user.hasWhenCreated())
+    {
+        throw std::invalid_argument("User creation time not set");
+    }
+    if (!user.hasWhenPasswordUpdated())
+    {
+        throw std::invalid_argument("Password update time not set");
+    }
+}
+
+void checkProvisionalUser(const ProvisionalUser &user)
+{
+    if (!user.hasName()){throw std::invalid_argument("User name not set");}
+    if (!user.wasIsAdministratorSet())
+    {
+        throw std::invalid_argument("User admin status not set");
+    } 
+    if (!user.hasWhenCreated())
+    { 
+        throw std::invalid_argument("User creation time not set");
+    }
+    if (!user.hasExpiration())
+    { 
+        throw std::invalid_argument("Expiration not set");
+    } 
+    if (!user.wasIsExpiredSet())
+    {
+        throw std::invalid_argument("Expired status not set");
+    }
+    if (!user.wasPasswordResetSet())
+    {
+        throw std::invalid_argument("Password reset status not set");
+    } 
+}
+
 }
 
 ///-------------------------------Schema Permission--------------------------///
@@ -88,8 +131,8 @@ class SchemaPermission::SchemaPermissionImpl
 {
 public:
     std::string mSchema;
-    std::chrono::microseconds mWhenGranted;
-    Permission mPermission;
+    std::chrono::microseconds mWhenGranted{0};
+    Permission mPermission{Permission::ReadWrite};
     bool mHasPermission{false};
     bool mHasWhenGranted{false};
 };
@@ -219,10 +262,10 @@ class ActiveKey::ActiveKeyImpl
 public:
     std::string mName;
     std::string mFingerprint;
-    std::chrono::microseconds mWhenRegistered;
+    std::chrono::microseconds mWhenRegistered{0};
     std::optional<std::chrono::microseconds> mExpiration{std::nullopt};
     std::optional<std::chrono::microseconds> mLastUsed{std::nullopt};
-    Algorithm mAlgorithm;
+    Algorithm mAlgorithm{Algorithm::ed25519};
     bool mHasWhenRegistered{false};
     bool mHasAlgorithm{false};    
 };  
@@ -315,7 +358,7 @@ void ActiveKey::setFingerprint(const std::string &fingerprint)
 
 std::string ActiveKey::getFingerprint() const
 {
-    if (!hasName()){throw std::runtime_error("Fingerprint not set");}
+    if (!hasFingerprint()){throw std::runtime_error("Fingerprint not set");}
     return pImpl->mFingerprint;
 }
 
@@ -332,7 +375,7 @@ void ActiveKey::setWhenRegistered(const std::chrono::microseconds &timestamp)
         if (*pImpl->mExpiration < timestamp)
         {
             throw std::invalid_argument(
-               "Registration time precedes expiration time");
+               "Expiration time precedes registration time");
         }
     }
     pImpl->mWhenRegistered = timestamp;
@@ -424,17 +467,17 @@ ActiveKey::toMessage() const
     return result;
 }
 
-///--------------------------------Revoked Key-------------------------------///
+///--------------------------------Inactive Key------------------------------///
 class InactiveKey::InactiveKeyImpl
 {
 public:
     std::string mName;
     std::string mFingerprint;
-    std::chrono::microseconds mWhenRegistered;
-    std::chrono::microseconds mWhenInvalidated;
+    std::chrono::microseconds mWhenRegistered{0};
+    std::chrono::microseconds mWhenInvalidated{0};
     std::optional<std::chrono::microseconds> mLastUsed{std::nullopt};
-    Algorithm mAlgorithm;
-    Reason mReason;
+    Algorithm mAlgorithm{Algorithm::ed25519};
+    Reason mReason{Reason::Revoked};
     bool mHasWhenRegistered{false};
     bool mHasWhenInvalidated{false};
     bool mHasAlgorithm{false};
@@ -529,7 +572,7 @@ void InactiveKey::setFingerprint(const std::string &fingerprint)
 
 std::string InactiveKey::getFingerprint() const
 {
-    if (!hasName()){throw std::runtime_error("Fingerprint not set");}
+    if (!hasFingerprint()){throw std::runtime_error("Fingerprint not set");}
     return pImpl->mFingerprint;
 }
 
@@ -579,7 +622,7 @@ void InactiveKey::setWhenRegistered(const std::chrono::microseconds &timestamp)
         if (getWhenInvalidated() < timestamp)
         {
             throw std::invalid_argument(
-               "Registration time precedes invalidation time");
+               "Invalidation time precedes registration time");
         }
     }
     pImpl->mWhenRegistered = timestamp;
@@ -688,9 +731,9 @@ public:
     std::vector<InactiveKey> mInactiveKeys;
     std::string mName; 
     std::optional<std::chrono::microseconds> mLastLogin{std::nullopt};
-    std::chrono::microseconds mWhenCreated;
-    std::chrono::microseconds mPasswordUpdated;
-    bool mIsAdministrator;
+    std::chrono::microseconds mWhenCreated{0};
+    std::chrono::microseconds mPasswordUpdated{0};
+    bool mIsAdministrator{false};
     bool mIsAdministratorSet{false};
     bool mHasWhenCreated{false};
     bool mHasWhenPasswordUpdated{false};
@@ -784,6 +827,14 @@ bool ActiveUser::wasIsAdministratorSet() const noexcept
 /// Creation time
 void ActiveUser::setWhenCreated(const std::chrono::microseconds &timestamp)
 {
+    if (hasWhenPasswordUpdated())
+    {
+        if (pImpl->mPasswordUpdated < timestamp)
+        {
+            throw std::invalid_argument(
+              "Password update time cannot proceed user creation time");
+        }
+    }
     pImpl->mWhenCreated = timestamp; 
     pImpl->mHasWhenCreated = true;
 }
@@ -801,6 +852,36 @@ bool ActiveUser::hasWhenCreated() const noexcept
 {
     return pImpl->mHasWhenCreated;
 } 
+
+/// Password updated
+void ActiveUser::setWhenPasswordUpdated(
+    const std::chrono::microseconds &timestamp)
+{
+    if (hasWhenCreated())
+    {
+        if (timestamp < pImpl->mWhenCreated)
+        {
+            throw std::invalid_argument(
+              "Creation time cannot precede password update time");
+        }
+    }
+    pImpl->mPasswordUpdated = timestamp;
+    pImpl->mHasWhenPasswordUpdated = true;
+}
+
+std::chrono::microseconds ActiveUser::getWhenPasswordUpdated() const
+{
+    if (!hasWhenPasswordUpdated())
+    {
+        throw std::runtime_error("Password update time not set");
+    }
+    return pImpl->mPasswordUpdated;
+}
+
+bool ActiveUser::hasWhenPasswordUpdated() const noexcept
+{
+    return pImpl->mHasWhenPasswordUpdated;
+}    
 
 /// Last login
 void ActiveUser::setLastLogin(const std::chrono::microseconds &timestamp)
@@ -880,6 +961,9 @@ ActiveUser::toMessage() const
     *result.mutable_created()
         = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
              getWhenCreated().count());
+    *result.mutable_password_updated()
+        = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
+             getWhenPasswordUpdated().count());
     auto lastLogin = getLastLogin();
     if (lastLogin != std::nullopt)
     {
@@ -924,11 +1008,11 @@ public:
     std::vector<InactiveKey> mInactiveKeys;
     std::string mName; 
     std::optional<std::chrono::microseconds> mLastLogin{std::nullopt};
-    std::chrono::microseconds mWhenCreated;
-    std::chrono::microseconds mWhenExpired;
-    bool mIsAdministrator;
-    bool mIsExpired;
-    bool mPasswordReset;
+    std::chrono::microseconds mWhenCreated{0};
+    std::chrono::microseconds mWhenExpired{0};
+    bool mIsAdministrator{false};
+    bool mIsExpired{false};
+    bool mPasswordReset{false};
     bool mIsAdministratorSet{false};
     bool mHasWhenCreated{false};
     bool mHasWhenExpired{false};
@@ -1099,7 +1183,7 @@ void ProvisionalUser::setWhenCreated(const std::chrono::microseconds &timestamp)
         if (pImpl->mWhenExpired < timestamp)
         {
             throw std::invalid_argument(
-               "Account cannot be expire before being created");
+               "Password update time cannot proceed user creation time");
         }
     }
     pImpl->mWhenCreated = timestamp;
@@ -1295,15 +1379,78 @@ UserList& UserList::operator=(UserList &&list) noexcept
     return *this;
 }
 
+/// Active users
+void UserList::setActiveUsers(std::vector<ActiveUser> &&users)
+{
+    // Check requisite fields set
+    for (const auto &user : users)
+    {
+        ::checkActiveUser(user);
+    }
+    // Should be enough now to check a unique constraint on user names
+    std::set<std::string> existingUsers;
+    for (const auto &user : pImpl->mProvisionalUsers)
+    {
+        existingUsers.insert(user.getName());
+    }
+    for (const auto &user : users)
+    {
+        if (existingUsers.contains(user.getName()))
+        {
+            throw std::invalid_argument(user.getName() + " already exists");
+        }
+        existingUsers.insert(user.getName());
+    }
+    pImpl->mActiveUsers = std::move(users);
+}
+
+std::vector<ActiveUser>
+UserList::getActiveUsers() const
+{
+    return pImpl->mActiveUsers;
+}
+
 const std::vector<ActiveUser>
 &UserList::getActiveUsersReference() const noexcept
 {
-    return pImpl->mActiveUsers;
+    return *&pImpl->mActiveUsers;
+}
+
+/// Provisional users
+void UserList::setProvisionalUsers(
+    std::vector<ProvisionalUser> &&users)
+{
+    // Check requisite fields set
+    for (const auto &user : users)
+    {
+        ::checkProvisionalUser(user);
+    }
+    // Should be enough now to check a unique constraint on user names
+    std::set<std::string> existingUsers;
+    for (const auto &user : pImpl->mActiveUsers)
+    {
+        existingUsers.insert(user.getName());
+    }
+    for (const auto &user : users)
+    {
+        if (existingUsers.contains(user.getName()))
+        {
+            throw std::invalid_argument(user.getName() + " already exists");
+        }
+        existingUsers.insert(user.getName());
+    }
+    pImpl->mProvisionalUsers = std::move(users);
+}
+
+std::vector<ProvisionalUser> 
+UserList::getProvisionalUsers() const
+{
+    return pImpl->mProvisionalUsers;
 }
 
 const std::vector<ProvisionalUser> 
 &UserList::getProvisionalUsersReference() const noexcept
 {
-    return pImpl->mProvisionalUsers;
+    return *&pImpl->mProvisionalUsers;
 }
 

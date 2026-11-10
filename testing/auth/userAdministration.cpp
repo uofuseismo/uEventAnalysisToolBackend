@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <chrono>
 #include <cstddef>
@@ -7,19 +8,24 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <sodium/crypto_hash_sha256.h>
+#include <sodium/utils.h>
 #include "uEventAnalysisToolBackend/auth/authenticator.hpp"
 #include "uEventAnalysisToolBackend/auth/claims.hpp"
 #include "uEventAnalysisToolBackend/auth/tokenVerifierOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/userAdministration.hpp"
 #include "uEventAnalysisToolBackend/auth/userAdministrationOptions.hpp"
+#include "uEventAnalysisToolBackend/auth/userList.hpp"
 #include "uEventAnalysisToolBackend/auth/userLoginAuthority.hpp"
 #include "uEventAnalysisToolBackend/auth/userLoginAuthorityOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/userTokenVerifier.hpp"
 #include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
+#include <uEventAnalysisToolAPI/admin/v1/list_users_response.pb.h>
 #include "integrationDatabase.hpp"
 #include "keyAssertion.hpp"
 #include "userSeeder.hpp"
@@ -319,6 +325,10 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::UserAdministration",
             REQUIRE(administration.setPermission(actor, user, "atlantis",
                                                  Permission::ReadOnly)
                     == ReturnCode::NotAuthorized);
+            // Nor may they see who else is here.
+            const auto listed = administration.listUsers(actor);
+            REQUIRE_FALSE(listed.has_value());
+            REQUIRE(listed.error() == ReturnCode::NotAuthorized);
         }
         // Nothing happened.
         REQUIRE_FALSE(seeder.exists(newcomer));
@@ -428,6 +438,22 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::UserAdministration",
         REQUIRE(administration.deleteUser(administrator, user)
                 == ReturnCode::NoUserFound);
     }
+    SECTION("The database fingerprints a key the way a client would")
+    {
+        // The recipe the ListUsersResponse documents for clients:
+        // SHA-256 of the raw 32 key bytes, standard base64, no padding.
+        const IntegrationDatabase::KeyPair key;
+        seeder.addKey(user, "laptop", key.encodedPublicKey());
+        const auto publicKey = key.publicKey();
+        std::array<unsigned char, crypto_hash_sha256_BYTES> digest {};
+        crypto_hash_sha256(digest.data(), publicKey.data(), publicKey.size());
+        const auto expected
+            = "SHA256:"
+            + IntegrationDatabase::toBase64(
+                  digest.data(), digest.size(),
+                  sodium_base64_VARIANT_ORIGINAL_NO_PADDING);
+        REQUIRE(seeder.keyFingerprint(user, "laptop") == expected);
+    }
     SECTION("A reset issues a new password and kills the old one")
     {
         const IntegrationDatabase::KeyPair key;
@@ -470,6 +496,170 @@ TEST_CASE("UEventAnalysisToolBackend::Auth::UserAdministration",
             = authority.loginWithPassword(std::pair {user, password});
         REQUIRE_FALSE(old.has_value());
         REQUIRE(old.error() == Result::InvalidCredentials);
+    }
+    SECTION("An administrator lists every user, split by state")
+    {
+        // One of each: an active user with grants, a login, and keys in
+        // every state; a reset user; a provisional administrator; and a
+        // newcomer whose issued password lapses.
+        const auto reset = "guy-am-i-reset-" + suffix;
+        seeder.addUser(reset, false);
+        seeder.setPermission(user, "ynp", "read_only");
+        seeder.setPermission(user, "utah", "read_write");
+        const IntegrationDatabase::KeyPair laptop;
+        const IntegrationDatabase::KeyPair old;
+        const IntegrationDatabase::KeyPair dated;
+        seeder.addKey(user, "laptop", laptop.encodedPublicKey(), 3600);
+        seeder.addKey(user, "old", old.encodedPublicKey());
+        seeder.revokeKey(user, "old");
+        seeder.addKey(user, "dated", dated.encodedPublicKey(), 1);
+        REQUIRE(administration.createProvisionalUser(administrator, newcomer)
+                              .has_value());
+        REQUIRE(administration.resetPassword(administrator, reset, false)
+                              .has_value());
+        REQUIRE_FALSE(permissionsOf(user).empty());   // logs user in
+        // Long enough for dated to expire, and for the newcomer's lapsed
+        // deadline below to fall after the account was created.
+        std::this_thread::sleep_for(std::chrono::milliseconds {1100});
+        seeder.expireProvisionalPassword(newcomer);
+
+        const auto listed = administration.listUsers(toUpper(administrator));
+        REQUIRE(listed.has_value());
+        const auto &active = listed->getActiveUsersReference();
+        const auto &provisional = listed->getProvisionalUsersReference();
+        const auto findIn = [](const auto &users, const std::string &name)
+        {
+            return std::ranges::find_if(users, [&](const auto &u)
+                                        {
+                                            return u.getName() == name;
+                                        });
+        };
+
+        // Which list each lands in, and only that one.
+        for (const auto &name : {administrator, user})
+        {
+            INFO("name = " << name);
+            REQUIRE(findIn(active, name) != active.end());
+            REQUIRE(findIn(provisional, name) == provisional.end());
+        }
+        for (const auto &name : {provisionalAdministrator, newcomer, reset})
+        {
+            INFO("name = " << name);
+            REQUIRE(findIn(provisional, name) != provisional.end());
+            REQUIRE(findIn(active, name) == active.end());
+        }
+        REQUIRE(findIn(active, stranger) == active.end());
+        REQUIRE(findIn(provisional, stranger) == provisional.end());
+        // Sorted by name, as the database returns them.
+        REQUIRE(std::ranges::is_sorted(active, {}, &ActiveUser::getName));
+        REQUIRE(std::ranges::is_sorted(provisional, {},
+                                       &ProvisionalUser::getName));
+
+        const auto &admin = *findIn(active, administrator);
+        REQUIRE(admin.isAdministrator());
+        REQUIRE_FALSE(admin.getLastLogin().has_value());
+        REQUIRE(admin.getWhenPasswordUpdated() >= admin.getWhenCreated());
+        REQUIRE(admin.getSchemaPermissions().empty());
+        REQUIRE(admin.getActiveKeys().empty());
+        REQUIRE(admin.getInactiveKeys().empty());
+
+        const auto &guy = *findIn(active, user);
+        REQUIRE_FALSE(guy.isAdministrator());
+        const auto lastLogin = guy.getLastLogin();
+        REQUIRE(lastLogin.has_value());
+        REQUIRE(lastLogin.value_or(std::chrono::microseconds {0})
+                >= guy.getWhenCreated());
+
+        const auto permissions = guy.getSchemaPermissions();
+        REQUIRE(permissions.size() == 2);
+        REQUIRE(permissions.at(0).getSchema() == "utah");
+        REQUIRE(permissions.at(0).getPermission()
+                == SchemaPermission::Permission::ReadWrite);
+        REQUIRE(permissions.at(1).getSchema() == "ynp");
+        REQUIRE(permissions.at(1).getPermission()
+                == SchemaPermission::Permission::ReadOnly);
+        for (const auto &permission : permissions)
+        {
+            REQUIRE(permission.getWhenGranted() >= guy.getWhenCreated());
+        }
+
+        const auto activeKeys = guy.getActiveKeys();
+        REQUIRE(activeKeys.size() == 1);
+        REQUIRE(activeKeys.at(0).getName() == "laptop");
+        REQUIRE(activeKeys.at(0).getAlgorithm() == ActiveKey::Algorithm::ed25519);
+        REQUIRE(activeKeys.at(0).getFingerprint()
+                == seeder.keyFingerprint(user, "laptop"));
+        const auto expiration = activeKeys.at(0).getExpiration();
+        REQUIRE(expiration.has_value());
+        REQUIRE(expiration.value_or(std::chrono::microseconds {0})
+                > activeKeys.at(0).getWhenRegistered());
+        REQUIRE_FALSE(activeKeys.at(0).getLastUsed().has_value());
+
+        auto inactiveKeys = guy.getInactiveKeys();
+        REQUIRE(inactiveKeys.size() == 2);
+        std::ranges::sort(inactiveKeys, {}, &InactiveKey::getName);
+        const auto &datedKey = inactiveKeys.at(0);
+        const auto &oldKey = inactiveKeys.at(1);
+        REQUIRE(datedKey.getName() == "dated");
+        REQUIRE(datedKey.getReason() == InactiveKey::Reason::Expired);
+        REQUIRE(datedKey.getFingerprint() == seeder.keyFingerprint(user, "dated"));
+        REQUIRE(datedKey.getWhenInvalidated() > datedKey.getWhenRegistered());
+        REQUIRE(oldKey.getName() == "old");
+        REQUIRE(oldKey.getReason() == InactiveKey::Reason::Revoked);
+        REQUIRE(oldKey.getWhenInvalidated() >= oldKey.getWhenRegistered());
+        REQUIRE(datedKey.getFingerprint() != oldKey.getFingerprint());
+
+        const auto &pending = *findIn(provisional, provisionalAdministrator);
+        REQUIRE(pending.isAdministrator());
+        REQUIRE_FALSE(pending.isExpired());
+        REQUIRE_FALSE(pending.passwordReset());
+        REQUIRE(pending.getExpiration() > pending.getWhenCreated());
+
+        const auto &lapsed = *findIn(provisional, newcomer);
+        REQUIRE_FALSE(lapsed.isAdministrator());
+        REQUIRE(lapsed.isExpired());
+        REQUIRE_FALSE(lapsed.passwordReset());
+
+        const auto &wasReset = *findIn(provisional, reset);
+        REQUIRE_FALSE(wasReset.isExpired());
+        REQUIRE(wasReset.passwordReset());
+
+        // What goes on the wire: unset stays unset rather than reading
+        // as 1970.
+        namespace V1 = UEventAnalysisToolAPI::Admin::V1;
+        const auto adminMessage
+            = admin.toMessage<V1::ListUsersResponse::ActiveUser> ();
+        REQUIRE(adminMessage.has_created());
+        REQUIRE(adminMessage.has_password_updated());
+        REQUIRE_FALSE(adminMessage.has_last_login());
+        const auto guyMessage
+            = guy.toMessage<V1::ListUsersResponse::ActiveUser> ();
+        REQUIRE(guyMessage.has_last_login());
+        REQUIRE(guyMessage.permissions_size() == 2);
+        REQUIRE(guyMessage.active_keys_size() == 1);
+        REQUIRE(guyMessage.active_keys(0).has_expires());
+        REQUIRE_FALSE(guyMessage.active_keys(0).has_last_used());
+        REQUIRE(guyMessage.inactive_keys_size() == 2);
+        for (const auto &key : guyMessage.inactive_keys())
+        {
+            REQUIRE(key.has_invalidated());
+            REQUIRE(key.reason()
+                    != V1::ListUsersResponse::InactiveKey::REASON_NOT_SPECIFIED);
+        }
+        const auto lapsedMessage
+            = lapsed.toMessage<V1::ListUsersResponse::ProvisionalUser> ();
+        REQUIRE(lapsedMessage.has_expiration());
+        REQUIRE(lapsedMessage.expired());
+        REQUIRE_FALSE(lapsedMessage.has_last_login());
+    }
+    SECTION("Listing needs a valid actor")
+    {
+        for (const auto &actor : {std::string {}, std::string {"b o b"}})
+        {
+            const auto listed = administration.listUsers(actor);
+            REQUIRE_FALSE(listed.has_value());
+            REQUIRE(listed.error() == ReturnCode::InvalidArgument);
+        }
     }
     SECTION("The last administrator cannot be removed, demoted, or reset")
     {

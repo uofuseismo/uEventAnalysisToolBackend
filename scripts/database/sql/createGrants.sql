@@ -58,7 +58,10 @@ GRANT EXECUTE ON FUNCTION
     auth.admin_set_user_permission(TEXT, TEXT, TEXT, TEXT),
     auth.admin_revoke_user_permission(TEXT, TEXT, TEXT),
     auth.admin_reset_user_password(TEXT, TEXT, TEXT, INTERVAL, BOOLEAN),
-    auth.admin_remove_user(TEXT, TEXT)
+    auth.admin_remove_user(TEXT, TEXT),
+    auth.admin_list_users(TEXT),
+    auth.admin_list_permissions(TEXT),
+    auth.admin_list_keys(TEXT)
     TO :"rw_role";
 
 --- Self-service mutations: read_write backend only.  These act on the
@@ -76,15 +79,18 @@ GRANT EXECUTE ON FUNCTION
 
 --- NOT granted to either backend, deliberately: add_user,
 --- add_provisional_user, remove_user, set_user_permission,
---- revoke_user_permission, require_admin, forbid_last_admin_removal.
+--- revoke_user_permission, require_admin, forbid_last_admin_removal,
+--- key_states, is_valid_public_key, key_fingerprint.
 --- The first five are the ungated versions the admin_ functions wrap --
 --- reachable only by a superuser, which is how the first administrator
 --- gets created:
 ---
 ---     psql -d ueatdb -c "SELECT auth.add_user('jsmith', '\$argon2id\$...', TRUE);"
 ---
---- The last two are internal; they run as the owner from inside the
---- definer functions and need no EXECUTE of their own.
+--- The rest are internal; they run as the owner from inside the
+--- definer functions (and the user_keys CHECK) and need no EXECUTE of
+--- their own.  key_states matters most: it returns everybody's keys
+--- and checks nothing.
 
 --- Read/verify functions: both backends.  Note get_password_hash is
 --- here because verifying a login IS a read; recording it is not.

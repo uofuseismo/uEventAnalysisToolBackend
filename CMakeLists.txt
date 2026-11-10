@@ -81,7 +81,6 @@ set(HEADER_FILES
     include/uEventAnalysisToolBackend/auth/password/hasherOptions.hpp
     include/uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp
     include/uEventAnalysisToolBackend/database/credentials.hpp
-    #include/uEventAnalysisToolBackend/grpc/bearerAuthenticator.hpp
     include/uEventAnalysisToolBackend/grpc/grpcServerOptions.hpp
     include/uEventAnalysisToolBackend/grpc/parseAuthorizationHeader.hpp
     include/uEventAnalysisToolBackend/grpc/requestIdentifierInterceptor.hpp
@@ -122,7 +121,6 @@ set(LIBRARY_SRC
     lib/auth/password/hasherOptions.cpp
     lib/auth/password/passwordPolicy.cpp
     lib/database/credentials.cpp
-    #lib/grpc/bearerAuthenticator.cpp
     lib/grpc/grpcServerOptions.cpp
     lib/grpc/parseAuthorizationHeader.cpp
     lib/grpc/requestIdentifierInterceptor.cpp

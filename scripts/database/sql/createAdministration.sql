@@ -270,3 +270,73 @@ RETURNS TABLE(name TEXT, is_admin BOOLEAN, provisional_until TIMESTAMPTZ,
       FROM auth.users u
      ORDER BY u.name;
 $$ LANGUAGE sql;
+
+--- The administrator's view: three listings, one row shape each, that
+--- the backend stitches together by name.  Call all three in ONE
+--- read-only REPEATABLE READ transaction -- each sees the same snapshot
+--- and the same NOW(), so a user cannot vanish between the listings or
+--- a key expire between two of them.  All are sorted by name.
+
+--- Every user.  provisional_until is the backend's split: non-NULL is
+--- a provisional user, whose remaining columns mean:
+---   expired         TRUE if the issued password has lapsed; they are
+---                   locked out until reset again.  Always FALSE for an
+---                   active user.
+---   password_reset  TRUE if they were active before (a reset), FALSE
+---                   for a new user who never chose a password.  Always
+---                   FALSE for an active user.
+--- is_admin on a provisional user is authority they will have once
+--- they activate, not authority they have now.
+CREATE OR REPLACE FUNCTION auth.admin_list_users(p_actor TEXT)
+RETURNS TABLE(name TEXT, is_admin BOOLEAN, created TIMESTAMPTZ,
+              password_updated TIMESTAMPTZ, last_login TIMESTAMPTZ,
+              provisional_until TIMESTAMPTZ, expired BOOLEAN,
+              password_reset BOOLEAN) AS $$
+BEGIN
+    PERFORM auth.require_admin(p_actor);
+    RETURN QUERY
+        SELECT u.name, u.is_admin, u.created, u.password_updated,
+               u.last_login, u.provisional_until,
+               COALESCE(u.provisional_until <= NOW(), FALSE),
+               u.provisional_until IS NOT NULL AND u.activated IS NOT NULL
+          FROM auth.users u
+         ORDER BY u.name;
+END;
+$$ LANGUAGE plpgsql;
+
+--- Every grant.  granted is when the current level was set: upgrading
+--- a user restamps it.
+CREATE OR REPLACE FUNCTION auth.admin_list_permissions(p_actor TEXT)
+RETURNS TABLE(name TEXT, schema_name TEXT, permission_name TEXT,
+              granted TIMESTAMPTZ) AS $$
+BEGIN
+    PERFORM auth.require_admin(p_actor);
+    RETURN QUERY
+        SELECT u.name, s.schema_name, p.permission_name, usp.granted
+          FROM auth.user_schema_permissions usp
+          JOIN auth.users u ON u.user_id = usp.user_id
+          JOIN auth.schemas s ON s.schema_id = usp.schema_id
+          JOIN auth.permissions p ON p.permission_id = usp.permission_id
+         ORDER BY u.name, s.schema_name;
+END;
+$$ LANGUAGE plpgsql;
+
+--- Every key, active and not.  Same columns as auth.list_user_keys,
+--- with the owner's name first; see auth.key_states for active,
+--- invalidated, and reason.
+CREATE OR REPLACE FUNCTION auth.admin_list_keys(p_actor TEXT)
+RETURNS TABLE(name TEXT, key_name TEXT, algorithm TEXT, fingerprint TEXT,
+              created TIMESTAMPTZ, expires TIMESTAMPTZ, revoked TIMESTAMPTZ,
+              last_used TIMESTAMPTZ, active BOOLEAN,
+              invalidated TIMESTAMPTZ, reason TEXT) AS $$
+BEGIN
+    PERFORM auth.require_admin(p_actor);
+    RETURN QUERY
+        SELECT u.name, k.key_name, k.algorithm, k.fingerprint, k.created,
+               k.expires, k.revoked, k.last_used, k.active, k.invalidated,
+               k.reason
+          FROM auth.key_states() k
+          JOIN auth.users u ON u.user_id = k.user_id
+         ORDER BY u.name, k.created, k.key_name;
+END;
+$$ LANGUAGE plpgsql;

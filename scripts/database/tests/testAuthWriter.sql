@@ -21,6 +21,9 @@
 ---     administrator' with the same SQLSTATE (42501), so the denial
 ---     tests match on the message too.  Otherwise a revoked grant would
 ---     pass a test meant to prove the actor check works.
+---   * auth.user_keys accepts only real-shaped ed25519 keys, so a test
+---     key is encode(sha256('pk-<label>'), 'base64'): 32 bytes, padded
+---     base64, and the same every time it is written.
 --- Copyright: Ben Baker (UUSS) distributed under the MIT license.
 
 --------------------------------------------------------------------------
@@ -433,7 +436,7 @@ END $$;
 --- An issued password must not become a permanent key.
 DO $$
 BEGIN
-    PERFORM auth.add_user_key('dave', 'laptop', 'pk-dave-early');
+    PERFORM auth.add_user_key('dave', 'laptop', encode(sha256('pk-dave-early'), 'base64'));
     RAISE EXCEPTION 'FAIL: provisional dave registered a key';
 EXCEPTION WHEN insufficient_privilege THEN
     IF SQLERRM NOT LIKE 'password change required%' THEN RAISE; END IF;
@@ -449,10 +452,10 @@ BEGIN
     IF auth.user_must_change_password('dave') THEN
         RAISE EXCEPTION 'FAIL: dave still provisional after changing password';
     END IF;
-    IF NOT auth.add_user_key('dave', 'laptop', 'pk-dave-laptop') THEN
+    IF NOT auth.add_user_key('dave', 'laptop', encode(sha256('pk-dave-laptop'), 'base64')) THEN
         RAISE EXCEPTION 'FAIL: activated dave could not add a key';
     END IF;
-    IF auth.get_user_by_key('pk-dave-laptop') IS DISTINCT FROM 'dave' THEN
+    IF auth.get_user_by_key(encode(sha256('pk-dave-laptop'), 'base64')) IS DISTINCT FROM 'dave' THEN
         RAISE EXCEPTION 'FAIL: dave key does not resolve';
     END IF;
     RAISE NOTICE 'ok: activation by password change';
@@ -467,7 +470,7 @@ SELECT auth.admin_add_provisional_user('root', 'frank', 'hash-frank',
                                        INTERVAL '1 second');
 --- alice will forget her password (no key revocation) and miss the
 --- window.  She must lose the password but keep the account.
-SELECT auth.add_user_key('alice', 'laptop', 'pk-alice-laptop');
+SELECT auth.add_user_key('alice', 'laptop', encode(sha256('pk-alice-laptop'), 'base64'));
 SELECT auth.admin_reset_user_password('root', 'alice', 'hash-alice-issued',
                                       INTERVAL '1 second', FALSE);
 SELECT pg_sleep(1.5);
@@ -506,7 +509,7 @@ BEGIN
         RAISE EXCEPTION 'FAIL: alice lost her permissions';
     END IF;
     --- A forgot-password reset is not a compromise: her key still works.
-    IF auth.get_user_by_key('pk-alice-laptop') IS DISTINCT FROM 'alice' THEN
+    IF auth.get_user_by_key(encode(sha256('pk-alice-laptop'), 'base64')) IS DISTINCT FROM 'alice' THEN
         RAISE EXCEPTION 'FAIL: alice key stopped working';
     END IF;
     RAISE NOTICE 'ok: the sweep spares established users';
@@ -515,7 +518,7 @@ END $$;
 --- Still provisional, so still no new keys, even with a working old one.
 DO $$
 BEGIN
-    PERFORM auth.add_user_key('alice', 'desktop', 'pk-alice-desktop');
+    PERFORM auth.add_user_key('alice', 'desktop', encode(sha256('pk-alice-desktop'), 'base64'));
     RAISE EXCEPTION 'FAIL: reset alice registered a key';
 EXCEPTION WHEN insufficient_privilege THEN
     IF SQLERRM NOT LIKE 'password change required%' THEN RAISE; END IF;
@@ -544,10 +547,10 @@ END $$;
 --------------------------------------------------------------------------
 
 SELECT auth.admin_add_user('root', 'carol', 'hash-carol');
-SELECT auth.add_user_key('carol', 'old', 'pk-carol-old');
+SELECT auth.add_user_key('carol', 'old', encode(sha256('pk-carol-old'), 'base64'));
 SELECT auth.revoke_user_key('carol', 'old');
-SELECT auth.add_user_key('carol', 'laptop', 'pk-carol-laptop');
-SELECT auth.add_user_key('carol', 'intruder', 'pk-carol-intruder');
+SELECT auth.add_user_key('carol', 'laptop', encode(sha256('pk-carol-laptop'), 'base64'));
+SELECT auth.add_user_key('carol', 'intruder', encode(sha256('pk-carol-intruder'), 'base64'));
 --- Separate statement so the compromise revocation gets a later NOW()
 --- than the old key's, and preserving that timestamp is checkable.
 SELECT pg_sleep(0.1);
@@ -565,8 +568,8 @@ BEGIN
                                           INTERVAL '1 hour', TRUE) THEN
         RAISE EXCEPTION 'FAIL: compromised reset of carol returned FALSE';
     END IF;
-    IF auth.get_user_by_key('pk-carol-laptop') IS NOT NULL
-       OR auth.get_user_by_key('pk-carol-intruder') IS NOT NULL THEN
+    IF auth.get_user_by_key(encode(sha256('pk-carol-laptop'), 'base64')) IS NOT NULL
+       OR auth.get_user_by_key(encode(sha256('pk-carol-intruder'), 'base64')) IS NOT NULL THEN
         RAISE EXCEPTION 'FAIL: a key survived a compromised reset';
     END IF;
     --- Revoked, not deleted: the rows are the audit trail.
@@ -583,8 +586,8 @@ BEGIN
         RAISE EXCEPTION 'FAIL: carol not provisional after reset';
     END IF;
     --- Only carol's keys: dave and alice are untouched.
-    IF auth.get_user_by_key('pk-dave-laptop') IS DISTINCT FROM 'dave'
-       OR auth.get_user_by_key('pk-alice-laptop') IS DISTINCT FROM 'alice' THEN
+    IF auth.get_user_by_key(encode(sha256('pk-dave-laptop'), 'base64')) IS DISTINCT FROM 'dave'
+       OR auth.get_user_by_key(encode(sha256('pk-alice-laptop'), 'base64')) IS DISTINCT FROM 'alice' THEN
         RAISE EXCEPTION 'FAIL: a compromised reset touched other users';
     END IF;
     IF auth.admin_reset_user_password('root', 'nobody', 'hash', INTERVAL '1 hour',
@@ -745,7 +748,7 @@ END $$;
 --------------------------------------------------------------------------
 
 SELECT auth.admin_add_user('root', 'gone', 'hash-gone');
-SELECT auth.add_user_key('gone', 'laptop', 'pk-gone');
+SELECT auth.add_user_key('gone', 'laptop', encode(sha256('pk-gone'), 'base64'));
 SELECT auth.admin_set_user_permission('root', 'gone', 'forge', 'read_only');
 
 DO $$
@@ -753,7 +756,7 @@ BEGIN
     IF NOT auth.admin_remove_user('root', 'GONE') THEN
         RAISE EXCEPTION 'FAIL: could not remove gone';
     END IF;
-    IF auth.get_user_by_key('pk-gone') IS NOT NULL THEN
+    IF auth.get_user_by_key(encode(sha256('pk-gone'), 'base64')) IS NOT NULL THEN
         RAISE EXCEPTION 'FAIL: a removed user key still resolves';
     END IF;
     IF auth.get_user_permission('gone', 'forge') IS NOT NULL THEN
@@ -773,26 +776,26 @@ END $$;
 
 DO $$
 BEGIN
-    IF NOT auth.consume_assertion('pk-dave-laptop', 'jti-1',
+    IF NOT auth.consume_assertion(encode(sha256('pk-dave-laptop'), 'base64'), 'jti-1',
                                   NOW() + INTERVAL '30 seconds') THEN
         RAISE EXCEPTION 'FAIL: a fresh assertion was refused';
     END IF;
-    IF auth.consume_assertion('pk-dave-laptop', 'jti-1',
+    IF auth.consume_assertion(encode(sha256('pk-dave-laptop'), 'base64'), 'jti-1',
                               NOW() + INTERVAL '30 seconds') THEN
         RAISE EXCEPTION 'FAIL: a replayed assertion was accepted';
     END IF;
     --- The exp is not part of the identity: a replay with a new exp is
     --- still a replay.
-    IF auth.consume_assertion('pk-dave-laptop', 'jti-1',
+    IF auth.consume_assertion(encode(sha256('pk-dave-laptop'), 'base64'), 'jti-1',
                               NOW() + INTERVAL '45 seconds') THEN
         RAISE EXCEPTION 'FAIL: a replay with a different exp was accepted';
     END IF;
-    IF NOT auth.consume_assertion('pk-dave-laptop', 'jti-2',
+    IF NOT auth.consume_assertion(encode(sha256('pk-dave-laptop'), 'base64'), 'jti-2',
                                   NOW() + INTERVAL '30 seconds') THEN
         RAISE EXCEPTION 'FAIL: a second assertion from dave was refused';
     END IF;
     --- Scoped per key: alice reusing dave's jti is not a replay.
-    IF NOT auth.consume_assertion('pk-alice-laptop', 'jti-1',
+    IF NOT auth.consume_assertion(encode(sha256('pk-alice-laptop'), 'base64'), 'jti-1',
                                   NOW() + INTERVAL '30 seconds') THEN
         RAISE EXCEPTION 'FAIL: one key''s jti blocked another key';
     END IF;
@@ -801,11 +804,11 @@ END $$;
 
 DO $$
 BEGIN
-    IF auth.consume_assertion('pk-nobody', 'jti-x',
+    IF auth.consume_assertion(encode(sha256('pk-nobody'), 'base64'), 'jti-x',
                               NOW() + INTERVAL '30 seconds') THEN
         RAISE EXCEPTION 'FAIL: consumed an assertion for an unknown key';
     END IF;
-    IF auth.consume_assertion('pk-carol-laptop', 'jti-x',
+    IF auth.consume_assertion(encode(sha256('pk-carol-laptop'), 'base64'), 'jti-x',
                               NOW() + INTERVAL '30 seconds') THEN
         RAISE EXCEPTION 'FAIL: consumed an assertion for a revoked key';
     END IF;
@@ -814,29 +817,29 @@ END $$;
 
 DO $$
 BEGIN
-    IF auth.consume_assertion('pk-dave-laptop', 'jti-old',
+    IF auth.consume_assertion(encode(sha256('pk-dave-laptop'), 'base64'), 'jti-old',
                               NOW() - INTERVAL '1 second') THEN
         RAISE EXCEPTION 'FAIL: consumed an expired assertion';
     END IF;
-    IF auth.consume_assertion('pk-dave-laptop', 'jti-now', NOW()) THEN
+    IF auth.consume_assertion(encode(sha256('pk-dave-laptop'), 'base64'), 'jti-now', NOW()) THEN
         RAISE EXCEPTION 'FAIL: consumed an assertion expiring now';
     END IF;
-    IF auth.consume_assertion('pk-dave-laptop', 'jti-far',
+    IF auth.consume_assertion(encode(sha256('pk-dave-laptop'), 'base64'), 'jti-far',
                               NOW() + INTERVAL '6 minutes') THEN
         RAISE EXCEPTION 'FAIL: consumed an assertion with a far-future exp';
     END IF;
-    IF auth.consume_assertion('pk-dave-laptop', '',
+    IF auth.consume_assertion(encode(sha256('pk-dave-laptop'), 'base64'), '',
                               NOW() + INTERVAL '30 seconds')
-       OR auth.consume_assertion('pk-dave-laptop', NULL,
+       OR auth.consume_assertion(encode(sha256('pk-dave-laptop'), 'base64'), NULL,
                                  NOW() + INTERVAL '30 seconds')
-       OR auth.consume_assertion('pk-dave-laptop', repeat('j', 129),
+       OR auth.consume_assertion(encode(sha256('pk-dave-laptop'), 'base64'), repeat('j', 129),
                                  NOW() + INTERVAL '30 seconds')
        OR auth.consume_assertion(NULL, 'jti-x',
                                  NOW() + INTERVAL '30 seconds')
-       OR auth.consume_assertion('pk-dave-laptop', 'jti-x', NULL) THEN
+       OR auth.consume_assertion(encode(sha256('pk-dave-laptop'), 'base64'), 'jti-x', NULL) THEN
         RAISE EXCEPTION 'FAIL: consumed an assertion with bad inputs';
     END IF;
-    IF NOT auth.consume_assertion('pk-dave-laptop', repeat('j', 128),
+    IF NOT auth.consume_assertion(encode(sha256('pk-dave-laptop'), 'base64'), repeat('j', 128),
                                   NOW() + INTERVAL '30 seconds') THEN
         RAISE EXCEPTION 'FAIL: refused a 128-character jti';
     END IF;
@@ -847,19 +850,19 @@ END $$;
 --- transaction.  Once an assertion has expired its jti may be
 --- forgotten, which is safe only because the expired assertion itself
 --- can no longer be consumed.
-SELECT auth.consume_assertion('pk-dave-laptop', 'jti-short',
+SELECT auth.consume_assertion(encode(sha256('pk-dave-laptop'), 'base64'), 'jti-short',
                               NOW() + INTERVAL '1 second');
 SELECT pg_sleep(1.5);
 
 DO $$
 BEGIN
     --- Triggers the cleanup of jti-short's row...
-    IF NOT auth.consume_assertion('pk-dave-laptop', 'jti-3',
+    IF NOT auth.consume_assertion(encode(sha256('pk-dave-laptop'), 'base64'), 'jti-3',
                                   NOW() + INTERVAL '30 seconds') THEN
         RAISE EXCEPTION 'FAIL: a fresh assertion was refused after expiry';
     END IF;
     --- ...and replaying the expired assertion with its own exp still fails.
-    IF auth.consume_assertion('pk-dave-laptop', 'jti-short',
+    IF auth.consume_assertion(encode(sha256('pk-dave-laptop'), 'base64'), 'jti-short',
                               NOW() - INTERVAL '0.5 seconds') THEN
         RAISE EXCEPTION 'FAIL: an expired assertion was replayed';
     END IF;
@@ -885,5 +888,306 @@ BEGIN
     END IF;
     RAISE NOTICE 'ok: list_users';
 END $$;
+
+--------------------------------------------------------------------------
+---                          Key validation                             ---
+--------------------------------------------------------------------------
+--- A key the backend could never verify, or never fingerprint, would
+--- sit in the table and break every listing that included it.
+
+SELECT auth.admin_add_user('root', 'lister', 'hash-lister');
+
+DO $$
+DECLARE v_key TEXT := encode(sha256('pk-lister-shape'), 'base64');
+BEGIN
+    IF auth.add_user_key('lister', 'garbage', 'not base64!') THEN
+        RAISE EXCEPTION 'FAIL: registered a key that is not base64';
+    END IF;
+    IF auth.add_user_key('lister', 'short',
+                         encode(substr(sha256('pk-x'), 1, 31), 'base64')) THEN
+        RAISE EXCEPTION 'FAIL: registered a 31-byte ed25519 key';
+    END IF;
+    IF auth.add_user_key('lister', 'long',
+                         encode(sha256('pk-x') || '\x00'::bytea, 'base64')) THEN
+        RAISE EXCEPTION 'FAIL: registered a 33-byte ed25519 key';
+    END IF;
+    --- The same 32 bytes spelled differently must not get past UNIQUE.
+    IF auth.add_user_key('lister', 'unpadded', rtrim(v_key, '=')) THEN
+        RAISE EXCEPTION 'FAIL: registered an unpadded key';
+    END IF;
+    IF auth.add_user_key('lister', 'wrapped',
+                         substr(v_key, 1, 20) || E'\n' || substr(v_key, 21)) THEN
+        RAISE EXCEPTION 'FAIL: registered a key with a newline inside it';
+    END IF;
+    IF auth.add_user_key('lister', 'rsa', v_key, 'rsa') THEN
+        RAISE EXCEPTION 'FAIL: registered a key for an unsupported algorithm';
+    END IF;
+    IF auth.add_user_key('lister', 'stale', v_key, 'ed25519',
+                         NOW() - INTERVAL '1 second')
+       OR auth.add_user_key('lister', 'stale', v_key, 'ed25519', NOW()) THEN
+        RAISE EXCEPTION 'FAIL: registered a key that had already expired';
+    END IF;
+    IF EXISTS (SELECT 1 FROM auth.list_user_keys('lister')) THEN
+        RAISE EXCEPTION 'FAIL: a refused key left a row';
+    END IF;
+    --- Surrounding spaces are trimmed, as everywhere else.
+    IF NOT auth.add_user_key('lister', 'shape', ' ' || v_key || ' ', 'ED25519') THEN
+        RAISE EXCEPTION 'FAIL: refused a well-formed key';
+    END IF;
+    IF auth.get_user_by_key(v_key) IS DISTINCT FROM 'lister' THEN
+        RAISE EXCEPTION 'FAIL: the well-formed key does not resolve';
+    END IF;
+    RAISE NOTICE 'ok: only verifiable keys are registered';
+END $$;
+
+--- The fingerprint is pinned to an outside computation, so a change of
+--- encoding here is caught rather than silently agreeing with itself.
+--- The key is RFC 8032's first ed25519 test vector; the fingerprint was
+--- computed with Python's hashlib and base64.
+DO $$
+BEGIN
+    IF NOT auth.add_user_key('lister', 'rfc8032',
+                             '11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=') THEN
+        RAISE EXCEPTION 'FAIL: could not register the RFC 8032 key';
+    END IF;
+    IF (SELECT fingerprint FROM auth.list_user_keys('lister')
+         WHERE key_name = 'rfc8032')
+       IS DISTINCT FROM 'SHA256:If4x36FUomFia/hUBG/SJxt77UtqvkWqWId+9H+XIbk' THEN
+        RAISE EXCEPTION 'FAIL: unexpected fingerprint %',
+            (SELECT fingerprint FROM auth.list_user_keys('lister')
+              WHERE key_name = 'rfc8032');
+    END IF;
+    RAISE NOTICE 'ok: the fingerprint matches an outside computation';
+END $$;
+
+--------------------------------------------------------------------------
+---                        Key states                                   ---
+--------------------------------------------------------------------------
+--- Five ways a key can stand, set up across statements because NOW()
+--- is frozen per transaction:
+---   shape    active, no expiry (above)
+---   live     active, expires in an hour
+---   dated    expired, never revoked
+---   pulled   revoked before its expiry
+---   lapsed   expired, THEN revoked: it stopped at its expiry
+
+SELECT auth.add_user_key('lister', 'live', encode(sha256('pk-lister-live'), 'base64'),
+                         'ed25519', NOW() + INTERVAL '1 hour');
+SELECT auth.add_user_key('lister', 'dated', encode(sha256('pk-lister-dated'), 'base64'),
+                         'ed25519', NOW() + INTERVAL '1 second');
+SELECT auth.add_user_key('lister', 'pulled', encode(sha256('pk-lister-pulled'), 'base64'),
+                         'ed25519', NOW() + INTERVAL '1 hour');
+SELECT auth.add_user_key('lister', 'lapsed', encode(sha256('pk-lister-lapsed'), 'base64'),
+                         'ed25519', NOW() + INTERVAL '1 second');
+SELECT auth.revoke_user_key('lister', 'pulled');
+SELECT pg_sleep(1.5);
+SELECT auth.revoke_user_key('lister', 'lapsed');
+
+DO $$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT * FROM auth.list_user_keys('lister') LOOP
+        CASE r.key_name
+        WHEN 'shape', 'rfc8032', 'live' THEN
+            IF NOT r.active OR r.invalidated IS NOT NULL
+               OR r.reason IS NOT NULL THEN
+                RAISE EXCEPTION 'FAIL: % should be active: %', r.key_name, r;
+            END IF;
+        WHEN 'dated' THEN
+            IF r.active OR r.reason IS DISTINCT FROM 'expired'
+               OR r.invalidated IS DISTINCT FROM r.expires
+               OR r.revoked IS NOT NULL THEN
+                RAISE EXCEPTION 'FAIL: dated should be expired: %', r;
+            END IF;
+        WHEN 'pulled' THEN
+            IF r.active OR r.reason IS DISTINCT FROM 'revoked'
+               OR r.invalidated IS DISTINCT FROM r.revoked THEN
+                RAISE EXCEPTION 'FAIL: pulled should be revoked: %', r;
+            END IF;
+        WHEN 'lapsed' THEN
+            IF r.active OR r.reason IS DISTINCT FROM 'expired'
+               OR r.invalidated IS DISTINCT FROM r.expires
+               OR r.revoked IS NULL OR r.revoked <= r.expires THEN
+                RAISE EXCEPTION 'FAIL: lapsed should have expired first: %', r;
+            END IF;
+        ELSE
+            RAISE EXCEPTION 'FAIL: unexpected key %', r.key_name;
+        END CASE;
+        IF r.fingerprint IS NULL OR r.fingerprint NOT LIKE 'SHA256:%' THEN
+            RAISE EXCEPTION 'FAIL: % has no fingerprint', r.key_name;
+        END IF;
+    END LOOP;
+    IF (SELECT count(*) FROM auth.list_user_keys('lister')) <> 6 THEN
+        RAISE EXCEPTION 'FAIL: expected six lister keys';
+    END IF;
+    --- The listing and the login agree on what active means.
+    IF auth.get_user_by_key(encode(sha256('pk-lister-live'), 'base64'))
+           IS DISTINCT FROM 'lister'
+       OR auth.get_user_by_key(encode(sha256('pk-lister-dated'), 'base64'))
+           IS NOT NULL
+       OR auth.get_user_by_key(encode(sha256('pk-lister-pulled'), 'base64'))
+           IS NOT NULL THEN
+        RAISE EXCEPTION 'FAIL: login disagrees with the listing';
+    END IF;
+    RAISE NOTICE 'ok: key states';
+END $$;
+
+--------------------------------------------------------------------------
+---                      Administrative listings                        ---
+--------------------------------------------------------------------------
+--- State at this point: root (admin), alice and dave (active), carol
+--- (reset after a compromise, so provisional), lister (active, keys
+--- above).  Add a new provisional user and one whose window lapses.
+
+SELECT auth.admin_set_user_permission('root', 'lister', 'ynp', 'read_write');
+SELECT auth.admin_set_user_permission('root', 'lister', 'utah', 'read_only');
+SELECT auth.admin_add_provisional_user('root', 'newbie', 'hash-newbie',
+                                       INTERVAL '1 hour');
+SELECT auth.admin_set_user_admin('root', 'newbie', TRUE);
+SELECT auth.admin_add_provisional_user('root', 'tardy', 'hash-tardy',
+                                       INTERVAL '1 second');
+SELECT pg_sleep(1.5);
+
+DO $$
+DECLARE r RECORD;
+BEGIN
+    IF (SELECT array_agg(name) FROM auth.admin_list_users('root'))
+       IS DISTINCT FROM ARRAY['alice', 'carol', 'dave', 'lister', 'newbie',
+                              'root', 'tardy'] THEN
+        RAISE EXCEPTION 'FAIL: unexpected users or order: %',
+            (SELECT array_agg(name) FROM auth.admin_list_users('root'));
+    END IF;
+    FOR r IN SELECT * FROM auth.admin_list_users('ROOT') LOOP
+        IF r.created IS NULL OR r.password_updated IS NULL THEN
+            RAISE EXCEPTION 'FAIL: % missing a timestamp: %', r.name, r;
+        END IF;
+        CASE r.name
+        WHEN 'root' THEN
+            IF NOT r.is_admin OR r.provisional_until IS NOT NULL
+               OR r.expired OR r.password_reset THEN
+                RAISE EXCEPTION 'FAIL: root: %', r;
+            END IF;
+        WHEN 'alice' THEN
+            --- The only one record_login has been called for.
+            IF r.is_admin OR r.provisional_until IS NOT NULL
+               OR r.last_login IS NULL OR r.expired OR r.password_reset THEN
+                RAISE EXCEPTION 'FAIL: alice: %', r;
+            END IF;
+        WHEN 'carol' THEN
+            IF r.provisional_until IS NULL OR r.expired
+               OR NOT r.password_reset THEN
+                RAISE EXCEPTION 'FAIL: carol should be a live reset: %', r;
+            END IF;
+        WHEN 'newbie' THEN
+            IF NOT r.is_admin OR r.provisional_until IS NULL OR r.expired
+               OR r.password_reset OR r.last_login IS NOT NULL THEN
+                RAISE EXCEPTION 'FAIL: newbie should be a new pending admin: %', r;
+            END IF;
+        WHEN 'tardy' THEN
+            IF r.provisional_until IS NULL OR NOT r.expired
+               OR r.password_reset THEN
+                RAISE EXCEPTION 'FAIL: tardy should have lapsed: %', r;
+            END IF;
+        ELSE
+            IF r.provisional_until IS NOT NULL OR r.expired
+               OR r.password_reset THEN
+                RAISE EXCEPTION 'FAIL: % should be active: %', r.name, r;
+            END IF;
+        END CASE;
+    END LOOP;
+    IF EXISTS (SELECT 1 FROM pg_proc p
+                 JOIN pg_namespace n ON n.oid = p.pronamespace
+                WHERE n.nspname = 'auth' AND p.proname LIKE 'admin_list_%'
+                  AND ('password_hash' = ANY(p.proargnames)
+                       OR 'public_key' = ANY(p.proargnames))) THEN
+        RAISE EXCEPTION 'FAIL: an admin listing exposes a hash or a raw key';
+    END IF;
+    RAISE NOTICE 'ok: admin_list_users';
+END $$;
+
+DO $$
+BEGIN
+    IF (SELECT array_agg(ROW(schema_name, permission_name)::TEXT)
+          FROM auth.admin_list_permissions('root') WHERE name = 'lister')
+       IS DISTINCT FROM ARRAY['(utah,read_only)', '(ynp,read_write)'] THEN
+        RAISE EXCEPTION 'FAIL: unexpected lister grants: %',
+            (SELECT array_agg(ROW(schema_name, permission_name)::TEXT)
+               FROM auth.admin_list_permissions('root') WHERE name = 'lister');
+    END IF;
+    IF EXISTS (SELECT 1 FROM auth.admin_list_permissions('root')
+                WHERE granted IS NULL) THEN
+        RAISE EXCEPTION 'FAIL: a grant has no time';
+    END IF;
+    --- Sorted by name, then schema.
+    IF (SELECT array_agg(name || '/' || schema_name)
+          FROM auth.admin_list_permissions('root'))
+       IS DISTINCT FROM
+       (SELECT array_agg(name || '/' || schema_name ORDER BY name, schema_name)
+          FROM auth.admin_list_permissions('root')) THEN
+        RAISE EXCEPTION 'FAIL: permissions not sorted';
+    END IF;
+    RAISE NOTICE 'ok: admin_list_permissions';
+END $$;
+
+DO $$
+BEGIN
+    --- The admin view is the same rows as the user's own view.
+    IF EXISTS (
+        (SELECT key_name, algorithm, fingerprint, created, expires, revoked,
+                last_used, active, invalidated, reason
+           FROM auth.admin_list_keys('root') WHERE name = 'lister')
+        EXCEPT ALL
+        (SELECT * FROM auth.list_user_keys('lister'))) THEN
+        RAISE EXCEPTION 'FAIL: admin and user key listings disagree';
+    END IF;
+    IF (SELECT count(*) FROM auth.admin_list_keys('root')
+         WHERE name = 'lister') <> 6 THEN
+        RAISE EXCEPTION 'FAIL: admin listing lost lister keys';
+    END IF;
+    --- carol's three, all revoked by the compromise reset.
+    IF (SELECT array_agg(reason) FROM auth.admin_list_keys('root')
+         WHERE name = 'carol')
+       IS DISTINCT FROM ARRAY['revoked', 'revoked', 'revoked'] THEN
+        RAISE EXCEPTION 'FAIL: carol keys should read revoked';
+    END IF;
+    RAISE NOTICE 'ok: admin_list_keys';
+END $$;
+
+--- Only an activated administrator may list.  Each call in its own
+--- block: a raise aborts the rest of a block.
+DO $$
+DECLARE v_call TEXT;
+        v_actor TEXT;
+BEGIN
+    FOREACH v_actor IN ARRAY ARRAY['dave', 'newbie', 'nobody', ''] LOOP
+        FOREACH v_call IN ARRAY ARRAY['admin_list_users',
+                                      'admin_list_permissions',
+                                      'admin_list_keys'] LOOP
+            BEGIN
+                EXECUTE format('SELECT * FROM auth.%I($1)', v_call)
+                  USING v_actor;
+                RAISE EXCEPTION 'FAIL: % listed via %', v_actor, v_call;
+            EXCEPTION WHEN insufficient_privilege THEN
+                IF SQLERRM NOT LIKE 'not authorized%' THEN RAISE; END IF;
+            END;
+        END LOOP;
+    END LOOP;
+    RAISE NOTICE 'ok: only an activated administrator may list';
+END $$;
+
+--- The unfiltered key table behind the listings is not the backend's
+--- to call.
+DO $$
+BEGIN
+    PERFORM * FROM auth.key_states();
+    RAISE EXCEPTION 'FAIL: writer could call key_states';
+EXCEPTION WHEN insufficient_privilege THEN
+    IF SQLERRM NOT LIKE 'permission denied%' THEN RAISE; END IF;
+    RAISE NOTICE 'ok: writer denied key_states';
+END $$;
+
+--- Leave the user set the reader suite expects.
+SELECT auth.admin_remove_user('root', 'newbie');
+SELECT auth.admin_remove_user('root', 'tardy');
 
 \echo 'testAuthWriter.sql: ALL PASSED'

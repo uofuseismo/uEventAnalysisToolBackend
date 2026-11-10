@@ -100,14 +100,19 @@ public:
     }
     /// @brief Registers a public key, in the encoded form auth.user_keys
     ///        stores.  It goes when the user does.
+    /// @param expiresInSeconds  If set, the key expires this long from now.
     void addKey(const std::string &name,
                 const std::string &keyName,
-                const std::string &encodedPublicKey)
+                const std::string &encodedPublicKey,
+                const std::optional<int> expiresInSeconds = std::nullopt)
     {
         pqxx::work transaction{*mConnection};
+        // NOW() + NULL is NULL: no expiry.
         const auto added
-            = transaction.exec("SELECT auth.add_user_key($1, $2, $3)",
-                               pqxx::params {name, keyName, encodedPublicKey})
+            = transaction.exec("SELECT auth.add_user_key($1, $2, $3, 'ed25519',"
+                               "  NOW() + make_interval(secs => $4))",
+                               pqxx::params {name, keyName, encodedPublicKey,
+                                             expiresInSeconds})
                          .one_row()[0].as<bool> ();
         transaction.commit();
         if (!added)
@@ -144,6 +149,17 @@ public:
                                " WHERE key_name = $2",
                                pqxx::params {name, keyName}).one_row();
         return !row[0].is_null();
+    }
+    /// @result The fingerprint the database lists for the key.
+    [[nodiscard]] std::string keyFingerprint(const std::string &name,
+                                             const std::string &keyName)
+    {
+        pqxx::nontransaction transaction{*mConnection};
+        return transaction.exec("SELECT fingerprint"
+                                "  FROM auth.list_user_keys($1)"
+                                " WHERE key_name = $2",
+                                pqxx::params {name, keyName})
+                          .one_row()[0].as<std::string> ();
     }
     /// @brief Removes a user someone else created - e.g., the class under
     ///        test - along with the seeded ones.

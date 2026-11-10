@@ -1,22 +1,27 @@
 #include <algorithm>
-#include <cstddef>
 #include <cctype>
+#include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <expected>
+#include <map>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
+#include <vector>
 #include <spdlog/spdlog.h>
 #include <spdlog/logger.h>
 #include "uEventAnalysisToolBackend/auth/userAdministration.hpp"
 #include "uEventAnalysisToolBackend/auth/userAdministrationOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/userList.hpp"
 #include "uEventAnalysisToolBackend/auth/password/hasher.hpp"
+//NOLINTNEXTLINE(misc-include-cleaner)
 #include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
-#include "uEventAnalysisToolBackend/database/credentials.hpp"
+//#include "uEventAnalysisToolBackend/database/credentials.hpp"
 #include "databaseUtilities.hpp"
 
 using namespace UEventAnalysisToolBackend::Auth;
@@ -195,38 +200,220 @@ public:
         }
     }
 
-/*
-    void listUsers()
+    /// @brief 
+    [[nodiscard]] std::expected<UserList, ReturnCode> 
+        listUsers(const std::string &actor)
     {
-        constexpr std::string_view query{"auth.list_users()"};
+        // One snapshot and one NOW() for all three: a user cannot vanish,
+        // or a key expire, between the listings.
+        using ListTransaction
+            = pqxx::transaction<pqxx::isolation_level::repeatable_read,
+                                pqxx::write_policy::read_only>;
+        // EXTRACT gives exact seconds (numeric); NULL stays NULL.
+        constexpr std::string_view usersQuery{
+            "SELECT name, is_admin,"
+            "       (EXTRACT(EPOCH FROM created) * 1000000)::BIGINT,"
+            "       (EXTRACT(EPOCH FROM password_updated) * 1000000)::BIGINT,"
+            "       (EXTRACT(EPOCH FROM last_login) * 1000000)::BIGINT,"
+            "       (EXTRACT(EPOCH FROM provisional_until) * 1000000)::BIGINT,"
+            "       expired, password_reset"
+            "  FROM auth.admin_list_users($1)"};
+        constexpr std::string_view permissionsQuery{
+            "SELECT name, schema_name, permission_name,"
+            "       (EXTRACT(EPOCH FROM granted) * 1000000)::BIGINT"
+            "  FROM auth.admin_list_permissions($1)"};
+        constexpr std::string_view keysQuery{
+            "SELECT name, key_name, algorithm, fingerprint,"
+            "       (EXTRACT(EPOCH FROM created) * 1000000)::BIGINT,"
+            "       (EXTRACT(EPOCH FROM expires) * 1000000)::BIGINT,"
+            "       (EXTRACT(EPOCH FROM last_used) * 1000000)::BIGINT,"
+            "       active,"
+            "       (EXTRACT(EPOCH FROM invalidated) * 1000000)::BIGINT,"
+            "       reason"
+            "  FROM auth.admin_list_keys($1)"};
+        // Everything below throws on a value the backend does not know -
+        // e.g., a permission level added to the database but not here.
+        // That is a deployment bug, so it surfaces as a server error.
+        const auto requireEd25519 = [](const std::string &algorithm)
+        {
+            if (algorithm != "ed25519")
+            {
+                throw std::runtime_error("Unhandled key algorithm "
+                                       + algorithm);
+            }
+        };
         try
         {
-            return withTransaction<pqxx::read_transaction>(
-                [&](pqxx::read_transaction &transaction) -> bool
+            return withTransaction<ListTransaction>(
+                [&](ListTransaction &transaction) -> UserList
                 {
-                    const auto ok
-                        = transaction.exec(query).one_row()[0]
-                                                 .as<bool> (); 
+                    const pqxx::params parameters{actor};
+                    // Permissions and keys first, grouped by user name.
+                    std::map<std::string, std::vector<SchemaPermission>>
+                        permissions;
+                    for (const auto &row :
+                         transaction.exec(permissionsQuery, parameters))
+                    {
+                        SchemaPermission permission;
+                        permission.setSchema(row[1].as<std::string> ());
+                        const auto level = row[2].as<std::string> ();
+                        if (level == "read_only")
+                        {
+                            permission.setPermission(
+                                SchemaPermission::Permission::ReadOnly);
+                        }
+                        else if (level == "read_write")
+                        {
+                            permission.setPermission(
+                                SchemaPermission::Permission::ReadWrite);
+                        }
+                        else
+                        {
+                            throw std::runtime_error(
+                                "Unhandled permission " + level);
+                        }
+                        permission.setWhenGranted(
+                            std::chrono::microseconds{row[3].as<int64_t> ()});
+                        permissions[row[0].as<std::string> ()]
+                            .push_back(std::move(permission));
+                    }
+
+                    std::map<std::string, std::vector<ActiveKey>> activeKeys;
+                    std::map<std::string, std::vector<InactiveKey>>
+                        inactiveKeys;
+                    for (const auto &row :
+                         transaction.exec(keysQuery, parameters))
+                    {
+                        const auto owner = row[0].as<std::string> ();
+                        requireEd25519(row[2].as<std::string> ());
+                        if (row[7].as<bool> ())
+                        {
+                            ActiveKey key;
+                            key.setName(row[1].as<std::string> ());
+                            key.setAlgorithm(ActiveKey::Algorithm::ed25519);
+                            key.setFingerprint(row[3].as<std::string> ());
+                            key.setWhenRegistered(
+                              std::chrono::microseconds{row[4].as<int64_t> ()});
+                            if (!row[5].is_null())
+                            {
+                                key.setExpiration(
+                                   std::chrono::microseconds{row[5].as<int64_t> ()});
+                            }
+                            if (!row[6].is_null())
+                            {
+                                key.setLastUsed(
+                                   std::chrono::microseconds{row[6].as<int64_t> ()});
+                            }
+                            activeKeys[owner].push_back(std::move(key));
+                        }
+                        else
+                        {
+                            InactiveKey key;
+                            key.setName(row[1].as<std::string> ());
+                            key.setAlgorithm(InactiveKey::Algorithm::ed25519);
+                            key.setFingerprint(row[3].as<std::string> ());
+                            key.setWhenRegistered(
+                                std::chrono::microseconds{row[4].as<int64_t> ()});
+                            if (!row[6].is_null())
+                            {
+                                key.setLastUsed(
+                                    std::chrono::microseconds{row[6].as<int64_t> ()});
+                            }
+                            key.setWhenInvalidated(
+                                    std::chrono::microseconds{row[8].as<int64_t> ()});
+                            const auto reason = row[9].as<std::string> ();
+                            if (reason == "revoked")
+                            {
+                                key.setReason(InactiveKey::Reason::Revoked);
+                            }
+                            else if (reason == "expired")
+                            {
+                                key.setReason(InactiveKey::Reason::Expired);
+                            }
+                            else
+                            {
+                                throw std::runtime_error(
+                                    "Unhandled key state " + reason);
+                            }
+                            inactiveKeys[owner].push_back(std::move(key));
+                        }
+                    }
+
+                    // Hands over a user's entries; nobody's means empty.
+                    const auto take = [](auto &map, const std::string &name)
+                    {
+                        auto node = map.extract(name);
+                        return node.empty()
+                             ? typename std::remove_cvref_t<decltype(map)>
+                                   ::mapped_type {}
+                             : std::move(node.mapped());
+                    };
+
+                    std::vector<ActiveUser> activeUsers;
+                    std::vector<ProvisionalUser> provisionalUsers;
+                    for (const auto &row :
+                         transaction.exec(usersQuery, parameters))
+                    {
+                        const auto name = row[0].as<std::string> ();
+                        const bool isAdministrator = row[1].as<bool> ();
+                        if (row[5].is_null())
+                        {
+                            ActiveUser user;
+                            user.setName(name);
+                            isAdministrator ? user.setIsAdministrator()
+                                            : user.setIsNotAdministrator();
+                            user.setWhenCreated(
+                                std::chrono::microseconds{row[2].as<int64_t> ()});
+                            user.setWhenPasswordUpdated(
+                                std::chrono::microseconds{row[3].as<int64_t> ()});
+                            if (!row[4].is_null())
+                            {
+                                user.setLastLogin(
+                                   std::chrono::microseconds{row[4].as<int64_t> ()});
+                            }
+                            user.setSchemaPermissions(take(permissions, name));
+                            user.setActiveKeys(take(activeKeys, name));
+                            user.setInactiveKeys(take(inactiveKeys, name));
+                            activeUsers.push_back(std::move(user));
+                        }
+                        else
+                        {
+                            ProvisionalUser user;
+                            user.setName(name);
+                            isAdministrator ? user.setIsAdministrator()
+                                            : user.setIsNotAdministrator();
+                            user.setWhenCreated(
+                                std::chrono::microseconds{row[2].as<int64_t> ()});
+                            user.setExpiration(
+                                std::chrono::microseconds{row[5].as<int64_t> ()});
+                            row[6].as<bool> () ? user.setExpired()
+                                               : user.setNotExpired();
+                            row[7].as<bool> () ? user.setPasswordReset()
+                                               : user.setPasswordNotReset();
+                            if (!row[4].is_null())
+                            {
+                                user.setLastLogin(
+                                    std::chrono::microseconds{row[4].as<int64_t> ()});
+                            }
+                            user.setSchemaPermissions(take(permissions, name));
+                            user.setActiveKeys(take(activeKeys, name));
+                            user.setInactiveKeys(take(inactiveKeys, name));
+                            provisionalUsers.push_back(std::move(user));
+                        }
+                    }
                     transaction.commit();
-                    return ok; 
+
+                    UserList result;
+                    result.setActiveUsers(std::move(activeUsers));
+                    result.setProvisionalUsers(std::move(provisionalUsers));
+                    return result;
                 });
         }
         catch (const pqxx::insufficient_privilege &)
         {
             return std::unexpected(ReturnCode::NotAuthorized);
         }
-        catch (const pqxx::sql_error &e) 
-        {
-            if (e.sqlstate() == "55006")
-            {
-                return std::unexpected(ReturnCode::LastAdministrator);
-            }
-            // TODO should this be servererror?
-            throw;
-        }
-        return std::unexpected(ReturnCode::ServerError);
     }
-*/
 
     //NOLINTBEGIN(bugprone-easily-swappable-parameters)
     [[nodiscard]]
@@ -351,8 +538,10 @@ bool UserAdministration::isInitialized() const noexcept
 /// Create a provisional user
 std::expected<UserAdministration::IssuedPassword,
               UserAdministration::ReturnCode>
+//NOLINTBEGIN(bugprone-easily-swappable-parameters)
 UserAdministration::createProvisionalUser(const std::string &actorIn,
                                           const std::string &nameIn)
+//NOLINTEND(bugprone-easily-swappable-parameters)
 {
     if (!isInitialized())
     {
@@ -448,9 +637,11 @@ UserAdministration::createProvisionalUser(const std::string &actorIn,
 /// Reset a password
 std::expected<UserAdministration::IssuedPassword,
               UserAdministration::ReturnCode>
+//NOLINTBEGIN(bugprone-easily-swappable-parameters)
 UserAdministration::resetPassword(const std::string &actorIn,
                                   const std::string &nameIn,
                                   const bool revokeKeys)
+//NOLINTEND(bugprone-easily-swappable-parameters)
 {
     if (!isInitialized())
     {
@@ -547,8 +738,10 @@ UserAdministration::resetPassword(const std::string &actorIn,
 
 /// Remove a user
 UserAdministration::ReturnCode
+//NOLINTBEGIN(bugprone-easily-swappable-parameters)
 UserAdministration::deleteUser(const std::string &actorIn,
                                const std::string &nameIn)
+//NOLINTEND(bugprone-easily-swappable-parameters)
 {
     if (!isInitialized())
     {
@@ -607,8 +800,10 @@ UserAdministration::deleteUser(const std::string &actorIn,
 
 /// Set a user as an admin
 UserAdministration::ReturnCode
+//NOLINTBEGIN(bugprone-easily-swappable-parameters)
 UserAdministration::setAdministrator(const std::string &actorIn,
                                      const std::string &nameIn)
+//NOLINTEND(bugprone-easily-swappable-parameters)
 {
     if (!isInitialized())
     {
@@ -668,8 +863,10 @@ UserAdministration::setAdministrator(const std::string &actorIn,
 
 /// Revoke admin privs from a user
 UserAdministration::ReturnCode
+//NOLINTBEGIN(bugprone-easily-swappable-parameters)
 UserAdministration::revokeAdministrator(const std::string &actorIn,
                                         const std::string &nameIn)
+//NOLINTEND(bugprone-easily-swappable-parameters)
 {
     if (!isInitialized())
     {   
@@ -729,10 +926,12 @@ UserAdministration::revokeAdministrator(const std::string &actorIn,
 
 /// Set permissions for user
 UserAdministration::ReturnCode
+//NOLINTBEGIN(bugprone-easily-swappable-parameters)
 UserAdministration::setPermission(const std::string &actorIn,
                                   const std::string &nameIn,
                                   const std::string &schemaIn,
                                   const Permission permissionEnum)
+//NOLINTEND(bugprone-easily-swappable-parameters)
 {
     if (!isInitialized())
     {   
@@ -800,9 +999,11 @@ UserAdministration::setPermission(const std::string &actorIn,
 
 /// Revoke permissions for user
 UserAdministration::ReturnCode
+//NOLINTBEGIN(bugprone-easily-swappable-parameters)
 UserAdministration::revokePermission(const std::string &actorIn,
                                      const std::string &nameIn,
                                      const std::string &schemaIn)
+//NOLINTEND(bugprone-easily-swappable-parameters)
 {
     if (!isInitialized())
     {
@@ -888,8 +1089,18 @@ UserAdministration::listUsers(const std::string &actorIn) const
     
     try                      
     {   
-// TODO
-        UserList result;
+        auto result = pImpl->listUsers(actor);
+        if (!result.has_value())
+        {
+            SPDLOG_LOGGER_WARN(pImpl->mLogger, "{} could not list users: {}",
+                               actor, ::toString(result.error()));
+            return std::unexpected(result.error());
+        }
+        SPDLOG_LOGGER_DEBUG(pImpl->mLogger,
+                            "{} listed {} active and {} provisional users",
+                            actor,
+                            result->getActiveUsersReference().size(),
+                            result->getProvisionalUsersReference().size());
         return result;
     }
     catch (const std::exception &e)

@@ -4,6 +4,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace UEventAnalysisToolBackend::Auth
 {
@@ -90,7 +91,7 @@ public:
     /// @result The key name.
     /// @throws std::runtime_error if \c hasName() is false.
     [[nodiscard]] std::string getName() const;
-    /// @result True indicates the key name was est.
+    /// @result True indicates the key name was set.
     [[nodiscard]] bool hasName() const noexcept;
 
     /// @brief Sets the key algorithm.
@@ -174,7 +175,7 @@ public:
     /// @result The key name.
     /// @throws std::runtime_error if \c hasName() is false.
     [[nodiscard]] std::string getName() const;
-    /// @result True indicates the key name was est.
+    /// @result True indicates the key name was set.
     [[nodiscard]] bool hasName() const noexcept;
 
     /// @brief Sets the key algorithm.
@@ -257,7 +258,7 @@ public:
     /// @result The user's name.
     /// @throws std::runtime_error if \c hasName() is false.
     [[nodiscard]] std::string getName() const;
-    /// @result True indicates the user's name was est.
+    /// @result True indicates the user's name was set.
     [[nodiscard]] bool hasName() const noexcept;
 
     /// @brief Indicate this user is an administrator.
@@ -342,7 +343,7 @@ public:
     /// @result The user's name.
     /// @throws std::runtime_error if \c hasName() is false.
     [[nodiscard]] std::string getName() const;
-    /// @result True indicates the user's name was est.
+    /// @result True indicates the user's name was set.
     [[nodiscard]] bool hasName() const noexcept;
 
     /// @brief Indicate this user is an administrator.
@@ -451,7 +452,7 @@ public:
     /// @brief Sets the actives users.
     void setActiveUsers(std::vector<ActiveUser> &&activeUsers);
     /// @result The active users.
-    [[nodiscard]] std::vector<ActiveUser> getActiveUsers() const noexcept;
+    [[nodiscard]] std::vector<ActiveUser> getActiveUsers() const;
     /// @result A constant reference to the active users.
     /// @note You should use \c getActiveUsers() instead.
     [[nodiscard]] const std::vector<ActiveUser> &getActiveUsersReference() const noexcept;
@@ -459,7 +460,7 @@ public:
     /// @brief Sets the provisional users.
     void setProvisionalUsers(std::vector<ProvisionalUser> &&provisionalUsers);
     /// @result The provisional users.
-    [[nodiscard]] std::vector<ProvisionalUser> getProvisionalUsers() const noexcept;
+    [[nodiscard]] std::vector<ProvisionalUser> getProvisionalUsers() const;
     /// @result A constant reference to the provisional users.
     /// @note You should use \c getProvisionalUsers() instead.
     [[nodiscard]] const std::vector<ProvisionalUser> &getProvisionalUsersReference() const noexcept;

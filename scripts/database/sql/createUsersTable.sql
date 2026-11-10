@@ -231,6 +231,42 @@ $$ LANGUAGE plpgsql;
 --- like libsodium's crypto_sign_verify_detached.
 --- Keys are revoked, never deleted: the row is the audit trail of what
 --- could authenticate when.  (Deleting the user still cascades.)
+
+--- TRUE if p_public_key is a key the backend could verify with: for
+--- ed25519, standard padded base64 (libsodium's
+--- sodium_base64_VARIANT_ORIGINAL) of exactly 32 bytes.  The encoding
+--- must also be canonical -- decode skips whitespace, so without that
+--- check the same key with a newline in it would slip past UNIQUE and
+--- identify a second user.  A row that fails this could never
+--- authenticate and could not be fingerprinted for a listing, so the
+--- table refuses it.  An algorithm the backend does not support is
+--- FALSE; adding one means adding it here and in the backend.
+CREATE OR REPLACE FUNCTION auth.is_valid_public_key(
+    p_public_key TEXT, p_algorithm TEXT)
+RETURNS BOOLEAN AS $$
+BEGIN
+    IF p_algorithm = 'ed25519' THEN
+        RETURN length(decode(p_public_key, 'base64')) = 32
+           AND encode(decode(p_public_key, 'base64'), 'base64') = p_public_key;
+    END IF;
+    RETURN FALSE;
+EXCEPTION WHEN OTHERS THEN
+    --- decode raises on anything that is not base64.
+    RETURN FALSE;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+--- The key's fingerprint, for telling keys apart in a listing:
+--- 'SHA256:' then standard base64, padding stripped, of the SHA-256 of
+--- the RAW 32 key bytes.  ssh-keygen -l hashes an SSH wire-format blob
+--- instead, so the two are not comparable.  Computed here and nowhere
+--- else so every listing agrees.
+CREATE OR REPLACE FUNCTION auth.key_fingerprint(p_public_key TEXT)
+RETURNS TEXT AS $$
+    SELECT 'SHA256:'
+        || rtrim(encode(sha256(decode(p_public_key, 'base64')), 'base64'), '=');
+$$ LANGUAGE sql IMMUTABLE STRICT;
+
 DROP TABLE IF EXISTS auth.user_keys CASCADE;
 CREATE TABLE auth.user_keys(
     key_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -246,18 +282,27 @@ CREATE TABLE auth.user_keys(
     algorithm TEXT NOT NULL DEFAULT 'ed25519'
         CHECK (algorithm = lower(algorithm)),
     created TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    --- NULL = no expiry.
-    expires TIMESTAMPTZ DEFAULT NULL,
-    --- NULL = active.  Set once; never unset.
+    --- NULL = no expiry.  A key that expired before it was registered
+    --- is a mistake, not a key.
+    expires TIMESTAMPTZ DEFAULT NULL
+        CHECK (expires IS NULL OR expires > created),
+    --- NULL = not revoked.  Set once; never unset.  Expiry does NOT set
+    --- it: revoked records that someone acted (the user, an
+    --- administrator, a compromise reset), expires that time ran out,
+    --- and an audit wants to tell the two apart.  auth.key_states says
+    --- which, if either, has happened.
     revoked TIMESTAMPTZ DEFAULT NULL,
     last_used TIMESTAMPTZ DEFAULT NULL,
-    UNIQUE (user_id, key_name)
+    UNIQUE (user_id, key_name),
+    CHECK (auth.is_valid_public_key(public_key, algorithm))
 );
 CREATE INDEX user_keys_user_id_idx ON auth.user_keys(user_id);
 
 --- Registers a public key for a user.  Returns TRUE on success; FALSE
 --- if the user doesn't exist, inputs are empty, the key name is taken
---- for this user, or the public key is already registered (to anyone).
+--- for this user, the public key is already registered (to anyone),
+--- the key is not one auth.is_valid_public_key accepts, or p_expires
+--- is not in the future.
 ---
 --- RAISES insufficient_privilege (42501) if the user holds an issued
 --- password.  A key outlives every password, so registering one is
@@ -290,7 +335,7 @@ BEGIN
         VALUES (v_user_id, trim(p_key_name), trim(p_public_key),
                 lower(trim(p_algorithm)), p_expires);
     RETURN TRUE;
-EXCEPTION WHEN unique_violation THEN
+EXCEPTION WHEN unique_violation OR check_violation THEN
     RETURN FALSE;
 END;
 $$ LANGUAGE plpgsql;
@@ -351,20 +396,61 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+--- Every key, with its state worked out once so that every listing
+--- agrees on it:
+---   active       TRUE if the key can log in right now -- not revoked
+---                and not expired, the same test auth.get_user_by_key
+---                applies.
+---   invalidated  When it stopped working; NULL while active.  A key
+---                that expired and was later revoked stopped at its
+---                expiry, the earlier of the two.
+---   reason       'revoked' or 'expired', whichever happened first;
+---                NULL while active.
+--- 'Right now' is NOW(), the transaction's start, so one transaction
+--- calling several listings sees a single instant.
+---
+--- Granted to no role: it takes no name and no actor and returns
+--- everybody's keys.  It runs from inside the definer functions.
+CREATE OR REPLACE FUNCTION auth.key_states()
+RETURNS TABLE(user_id BIGINT, key_name TEXT, algorithm TEXT,
+              fingerprint TEXT, created TIMESTAMPTZ, expires TIMESTAMPTZ,
+              revoked TIMESTAMPTZ, last_used TIMESTAMPTZ, active BOOLEAN,
+              invalidated TIMESTAMPTZ, reason TEXT) AS $$
+    SELECT k.user_id, k.key_name, k.algorithm,
+           auth.key_fingerprint(k.public_key),
+           k.created, k.expires, k.revoked, k.last_used,
+           s.lapsed IS NULL AND k.revoked IS NULL,
+           --- LEAST ignores NULLs.
+           LEAST(s.lapsed, k.revoked),
+           CASE WHEN s.lapsed IS NULL AND k.revoked IS NULL THEN NULL
+                WHEN k.revoked IS NULL OR s.lapsed <= k.revoked THEN 'expired'
+                ELSE 'revoked'
+           END
+      FROM auth.user_keys k
+      --- The expiry, if it has passed.
+      CROSS JOIN LATERAL
+           (SELECT CASE WHEN k.expires <= NOW() THEN k.expires END
+                   AS lapsed) s;
+$$ LANGUAGE sql STABLE;
+
 --- Lists a user's keys and their states.  The frontend's 'manage my
 --- keys' page is built from this.  Never returns the key material a
 --- client shouldn't need; public keys are public, so all columns are
---- safe here.
+--- safe here.  See auth.key_states for active, invalidated, and reason.
+--- Dropped first because CREATE OR REPLACE cannot change the columns a
+--- function returns.
+DROP FUNCTION IF EXISTS auth.list_user_keys(TEXT);
 CREATE OR REPLACE FUNCTION auth.list_user_keys(p_name TEXT)
-RETURNS TABLE(key_name TEXT, algorithm TEXT, created TIMESTAMPTZ,
-              expires TIMESTAMPTZ, revoked TIMESTAMPTZ,
-              last_used TIMESTAMPTZ) AS $$
-    SELECT k.key_name, k.algorithm, k.created, k.expires, k.revoked,
-           k.last_used
-      FROM auth.user_keys k
+RETURNS TABLE(key_name TEXT, algorithm TEXT, fingerprint TEXT,
+              created TIMESTAMPTZ, expires TIMESTAMPTZ, revoked TIMESTAMPTZ,
+              last_used TIMESTAMPTZ, active BOOLEAN,
+              invalidated TIMESTAMPTZ, reason TEXT) AS $$
+    SELECT k.key_name, k.algorithm, k.fingerprint, k.created, k.expires,
+           k.revoked, k.last_used, k.active, k.invalidated, k.reason
+      FROM auth.key_states() k
       JOIN auth.users u ON u.user_id = k.user_id
      WHERE u.name = lower(trim(p_name))
-     ORDER BY k.created;
+     ORDER BY k.created, k.key_name;
 $$ LANGUAGE sql;
 
 --------------------------------------------------------------------------

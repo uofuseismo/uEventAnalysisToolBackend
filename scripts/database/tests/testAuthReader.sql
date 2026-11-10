@@ -40,7 +40,7 @@ BEGIN
     IF auth.get_password_hash('alice') IS DISTINCT FROM 'hash-alice-new' THEN
         RAISE EXCEPTION 'FAIL: reader could not fetch alice hash';
     END IF;
-    IF auth.get_user_by_key('pk-dave-laptop') IS DISTINCT FROM 'dave' THEN
+    IF auth.get_user_by_key(encode(sha256('pk-dave-laptop'), 'base64')) IS DISTINCT FROM 'dave' THEN
         RAISE EXCEPTION 'FAIL: reader could not resolve a key';
     END IF;
     IF auth.get_user_permission('alice', 'utah') IS DISTINCT FROM 'read_write' THEN
@@ -89,14 +89,20 @@ BEGIN
     ($q$SELECT auth.admin_revoke_user_permission('root', 'alice', 'utah')$q$),
     ($q$SELECT auth.admin_reset_user_password('root', 'alice', 'hash', INTERVAL '1 hour', TRUE)$q$),
     ($q$SELECT auth.admin_remove_user('root', 'alice')$q$),
+    --- Reads, but administrative ones: user management belongs to the
+    --- read_write backend, and the reader has no business holding them.
+    ($q$SELECT * FROM auth.admin_list_users('root')$q$),
+    ($q$SELECT * FROM auth.admin_list_permissions('root')$q$),
+    ($q$SELECT * FROM auth.admin_list_keys('root')$q$),
+    ($q$SELECT * FROM auth.key_states()$q$),
     ($q$SELECT auth.update_user_password('alice', 'hash')$q$),
     ($q$SELECT auth.record_login('alice')$q$),
-    ($q$SELECT auth.add_user_key('alice', 'sneaky', 'pk-sneaky')$q$),
+    ($q$SELECT auth.add_user_key('alice', 'sneaky', encode(sha256('pk-sneaky'), 'base64'))$q$),
     ($q$SELECT auth.revoke_user_key('alice', 'laptop')$q$),
-    ($q$SELECT auth.record_key_use('pk-alice-laptop')$q$),
+    ($q$SELECT auth.record_key_use(encode(sha256('pk-alice-laptop'), 'base64'))$q$),
     --- Burning a jti is a write.  A reader holding it could burn the
     --- jti of an assertion in flight and refuse someone's login.
-    ($q$SELECT auth.consume_assertion('pk-alice-laptop', 'jti-sneaky', NOW() + INTERVAL '30 seconds')$q$),
+    ($q$SELECT auth.consume_assertion(encode(sha256('pk-alice-laptop'), 'base64'), 'jti-sneaky', NOW() + INTERVAL '30 seconds')$q$),
     --- The sweep deletes rows.  A reader holding it could empty the
     --- pending-user list.
     ($q$SELECT auth.delete_expired_provisional_users()$q$)

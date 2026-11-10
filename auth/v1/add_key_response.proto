@@ -1,0 +1,12 @@
+edition = "2023";
+
+package UEventAnalysisToolAPI.Auth.V1;
+
+/**
+ * Response to an add key request.
+ */
+message AddKeyResponse {
+   // Any accompanying details.
+   string details = 1 [default = ""];
+}
+

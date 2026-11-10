@@ -168,14 +168,20 @@ set(PROTO_SRC
     uEventAnalysisToolAPI/admin/v1/set_permission_request.proto
     uEventAnalysisToolAPI/admin/v1/set_permission_response.proto
     uEventAnalysisToolAPI/admin/v1/service.proto
+    uEventAnalysisToolAPI/auth/v1/add_key_request.proto
+    uEventAnalysisToolAPI/auth/v1/add_key_response.proto
     uEventAnalysisToolAPI/auth/v1/change_password_request.proto
     uEventAnalysisToolAPI/auth/v1/change_password_response.proto
+    uEventAnalysisToolAPI/auth/v1/list_keys_request.proto
+    uEventAnalysisToolAPI/auth/v1/list_keys_response.proto
     uEventAnalysisToolAPI/auth/v1/login_with_key_request.proto
     uEventAnalysisToolAPI/auth/v1/login_with_key_response.proto
     uEventAnalysisToolAPI/auth/v1/login_with_password_request.proto
     uEventAnalysisToolAPI/auth/v1/login_with_password_response.proto
     uEventAnalysisToolAPI/auth/v1/get_password_requirements_request.proto
     uEventAnalysisToolAPI/auth/v1/password_requirements.proto
+    uEventAnalysisToolAPI/auth/v1/revoke_key_request.proto
+    uEventAnalysisToolAPI/auth/v1/revoke_key_response.proto
     uEventAnalysisToolAPI/auth/v1/service.proto
     uEventAnalysisToolAPI/settings/v1/get_map_provider_request.proto
     uEventAnalysisToolAPI/settings/v1/map_provider.proto

@@ -40,7 +40,7 @@ service AuthService {
    // hijacked token cannot allow another user to add additional keys.
    rpc AddKey(AddKeyRequest) returns(AddKeyResponse) {};
    // Allows the user to list their keys.
-   rpc ListKeys(ListKeysRequest) returns(ListRequestResponse) {};
+   rpc ListKeys(ListKeysRequest) returns(ListKeyResponse) {};
    // Allows the user to revoke a key.
    rpc RevokeKey(RevokeKeyRequest) returns(RevokeKeyResponse) {};
 }

@@ -79,8 +79,14 @@ grpc::Status enumToStatus(const UAuth::UserAdministration::ReturnCode code,
     else if (code ==
              UAuth::UserAdministration::ReturnCode::LastAdministrator)
     {       
-        return {grpc::StatusCode::INVALID_ARGUMENT,
+        return {grpc::StatusCode::FAILED_PRECONDITION,
                 "Refused - action would leave no administrators"};
+    }
+    else if (code ==
+             UAuth::UserAdministration::ReturnCode::NoUserFound)
+    {
+        return {grpc::StatusCode::NOT_FOUND,
+                "User " + userName + " not found"};
     }
     else if (code ==
              UAuth::UserAdministration::ReturnCode::ServerError)
@@ -369,6 +375,76 @@ grpc::ServerUnaryReactor
                        pImpl->mLogger);
 }
 
+///----------------------------Reset Password--------------------------------///
+grpc::ServerUnaryReactor
+*AdminService::ResetPassword(
+    grpc::CallbackServerContext *context,
+    const UEventAnalysisToolAPI::Admin::V1::ResetPasswordRequest *request,
+    UEventAnalysisToolAPI::Admin::V1::ResetPasswordResponse *response)
+{
+    namespace UAdminV1 = UEventAnalysisToolAPI::Admin::V1;
+    class Reactor final : public GRPC::UnaryReactor
+    {
+    public:
+        Reactor(UAdminV1::ResetPasswordResponse *response,
+                grpc::CallbackServerContext *context,
+                const UAdminV1::ResetPasswordRequest &request,
+                UAuth::UserAdministration &administration,
+                const UAuth::AdministratorTokenVerifier &verifier,
+                std::shared_ptr<spdlog::logger> loggerPtr) :
+            UnaryReactor(context,
+                         "Admin.V1.ResetPassword",
+                         std::move(loggerPtr),
+                         verifier)
+        {
+            if (!isAuthenticated()){return;}
+            run([&]() -> grpc::Status
+            {
+                const auto &actor = getClaims()->getUser();
+                if (request.name().empty())
+                {
+                    return {grpc::StatusCode::INVALID_ARGUMENT,
+                            "User name is required"};
+                }
+                if (!request.has_revoke_keys())
+                {
+                    return {grpc::StatusCode::INVALID_ARGUMENT,
+                            "Whether to revoke keys or not must be specified"};
+                }
+                auto result
+                    = administration.resetPassword(actor,
+                                                   request.name(),
+                                                   request.revoke_keys());
+                if (!result.has_value())
+                {
+                    return enumToStatus(result.error(), request.name());
+                }
+                if (request.revoke_keys())
+                {
+                    SPDLOG_LOGGER_INFO(&logger(),
+                       "{}: {} reset password and revoked keys for {}",
+                       requestIdentifier(), actor, request.name());
+                }
+                else
+                {
+                    SPDLOG_LOGGER_INFO(&logger(),
+                       "{}: {} reset password for {}",
+                       requestIdentifier(), actor, request.name());
+                }
+                response->set_temporary_password(
+                    std::move(result->issuedPassword));
+                return grpc::Status::OK;
+            });
+         };
+    };
+    return new Reactor(response,
+                       context,
+                       *request,
+                       *pImpl->mUserAdministration,
+                       *pImpl->mAdministratorTokenVerifier,
+                       pImpl->mLogger);
+}
+
 ///------------------------------Delete User---------------------------------///
 grpc::ServerUnaryReactor
 *AdminService::DeleteUser(
@@ -407,8 +483,8 @@ grpc::ServerUnaryReactor
                     return enumToStatus(result, request.name());
                 }
                 SPDLOG_LOGGER_INFO(&logger(),
-                                   "{} deleted user {}",
-                                   actor, request.name());
+                    "{}: {} deleted user {}",
+                    requestIdentifier(), actor, request.name());
                 return grpc::Status::OK;
             });
         };
@@ -511,8 +587,8 @@ grpc::ServerUnaryReactor
                     return enumToStatus(result, request.name());
                 }
                 SPDLOG_LOGGER_INFO(&logger(),
-                                   "{} granted user {} admin privileges",
-                                   actor, request.name());
+                    "{}: {} granted user {} admin privileges",
+                    requestIdentifier(), actor, request.name());
                 return grpc::Status::OK;
             });
         };
@@ -565,8 +641,9 @@ grpc::ServerUnaryReactor
                     return enumToStatus(result, request.name());
                 }
                 SPDLOG_LOGGER_INFO(&logger(),
-                                   "{} revoked user {} permissions from {}",
-                                   actor, request.name(), request.schema());
+                    "{}: {} revoked user {} permissions from {}",
+                    requestIdentifier(), 
+                    actor, request.name(), request.schema());
                 return grpc::Status::OK;
             });
         };

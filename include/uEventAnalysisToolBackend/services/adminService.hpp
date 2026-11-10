@@ -20,6 +20,8 @@ namespace UEventAnalysisToolAPI::Admin::V1
  class SetAdministratorResponse;
  class SetPermissionRequest;
  class SetPermissionResponse;
+ class ResetPasswordRequest;
+ class ResetPasswordResponse;
  class RevokeAdministratorRequest;
  class RevokeAdministratorResponse;
  class RevokePermissionRequest;
@@ -68,6 +70,12 @@ public:
             grpc::CallbackServerContext *context,
             const UEventAnalysisToolAPI::Admin::V1::CreateUserRequest *request,
             UEventAnalysisToolAPI::Admin::V1::CreateUserResponse *response) override;
+
+    grpc::ServerUnaryReactor
+        *ResetPassword(
+            grpc::CallbackServerContext *context,
+            const UEventAnalysisToolAPI::Admin::V1::ResetPasswordRequest *request,
+            UEventAnalysisToolAPI::Admin::V1::ResetPasswordResponse *response) override;
 
     grpc::ServerUnaryReactor
         *DeleteUser(

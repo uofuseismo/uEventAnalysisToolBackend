@@ -70,7 +70,7 @@ GRANT EXECUTE ON FUNCTION
 GRANT EXECUTE ON FUNCTION
     auth.update_user_password(TEXT, TEXT),
     auth.record_login(TEXT),
-    auth.add_user_key(TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ),
+    auth.add_user_key(TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ, INTEGER),
     auth.revoke_user_key(TEXT, TEXT),
     auth.record_key_use(TEXT),
     auth.consume_assertion(TEXT, TEXT, TIMESTAMPTZ),

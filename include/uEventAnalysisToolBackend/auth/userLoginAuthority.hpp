@@ -48,6 +48,8 @@ public:
         NameInUse,              /*!< The user already has a key by this name. */
         KeyInUse,               /*!< This public key is already registered. */
         NoKeyFound,             /*!< No active key by this name (revoke only). */
+        TooManyKeys,            /*!< No key was added because the user has hit 
+                                     their limit. */
         ServerError
     };
 public:

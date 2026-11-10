@@ -1098,6 +1098,84 @@ BEGIN
     RAISE NOTICE 'ok: each clash is reported as itself';
 END $$;
 
+--- The cap on active keys.  Only active keys count, so an expired key
+--- needs a second to lapse first, across statements.
+SELECT auth.admin_add_user('root', 'capped', 'hash-capped');
+SELECT auth.add_user_key('capped', 'brief', encode(sha256('pk-capped-brief'), 'base64'),
+                         'ed25519', NOW() + INTERVAL '1 second');
+SELECT pg_sleep(1.5);
+
+DO $$
+DECLARE v_state TEXT;
+        v_message TEXT;
+        r RECORD;
+BEGIN
+    --- brief has expired, so these are the first two that count.
+    IF NOT auth.add_user_key('capped', 'one', encode(sha256('pk-capped-one'), 'base64'),
+                             'ed25519', NULL, 2)
+       OR NOT auth.add_user_key('capped', 'two', encode(sha256('pk-capped-two'), 'base64'),
+                                'ed25519', NULL, 2) THEN
+        RAISE EXCEPTION 'FAIL: an expired key counted against the cap';
+    END IF;
+    FOR r IN SELECT * FROM (VALUES
+        ('a key over the cap',
+         format('SELECT auth.add_user_key(%L, %L, %L, %L, NULL, 2)', 'capped',
+                'three', encode(sha256('pk-capped-three'), 'base64'), 'ed25519'),
+         '53400', 'too many active keys: the limit is 2%'),
+        --- At the cap, a clashing name is still the user's first mistake.
+        ('a clashing name at the cap',
+         format('SELECT auth.add_user_key(%L, %L, %L, %L, NULL, 2)', 'capped',
+                'one', encode(sha256('pk-capped-three'), 'base64'), 'ed25519'),
+         '42710', 'key name already in use%'),
+        ('a key when keys are switched off',
+         format('SELECT auth.add_user_key(%L, %L, %L, %L, NULL, 0)', 'capped',
+                'three', encode(sha256('pk-capped-three'), 'base64'), 'ed25519'),
+         '53400', 'too many active keys: the limit is 0%'),
+        ('a negative cap',
+         format('SELECT auth.add_user_key(%L, %L, %L, %L, NULL, -1)', 'capped',
+                'three', encode(sha256('pk-capped-three'), 'base64'), 'ed25519'),
+         '22023', 'invalid key limit%')
+        ) AS t(label, call, state, message) LOOP
+        BEGIN
+            EXECUTE r.call;
+            RAISE EXCEPTION 'FAIL: registered %', r.label;
+        EXCEPTION WHEN OTHERS THEN
+            GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE,
+                                    v_message = MESSAGE_TEXT;
+            IF v_state <> r.state OR v_message NOT LIKE r.message THEN
+                RAISE EXCEPTION 'FAIL: % raised % "%", expected % "%"',
+                    r.label, v_state, v_message, r.state, r.message;
+            END IF;
+        END;
+    END LOOP;
+    --- Revoking makes room.
+    IF NOT auth.revoke_user_key('capped', 'two') THEN
+        RAISE EXCEPTION 'FAIL: could not revoke capped two';
+    END IF;
+    IF NOT auth.add_user_key('capped', 'three', encode(sha256('pk-capped-three'), 'base64'),
+                             'ed25519', NULL, 2) THEN
+        RAISE EXCEPTION 'FAIL: a revoked key counted against the cap';
+    END IF;
+    --- No cap, no limit: the default the existing callers get.
+    IF NOT auth.add_user_key('capped', 'four', encode(sha256('pk-capped-four'), 'base64')) THEN
+        RAISE EXCEPTION 'FAIL: the default refused a key past an old cap';
+    END IF;
+    IF (SELECT count(*) FROM auth.list_user_keys('capped') WHERE active) <> 3 THEN
+        RAISE EXCEPTION 'FAIL: capped has % active keys, expected 3',
+            (SELECT count(*) FROM auth.list_user_keys('capped') WHERE active);
+    END IF;
+    --- An unknown user is still FALSE, cap or not.
+    IF auth.add_user_key('no-such-user', 'laptop',
+                         encode(sha256('pk-no-such-user'), 'base64'),
+                         'ed25519', NULL, 2) THEN
+        RAISE EXCEPTION 'FAIL: registered a key for a user who does not exist';
+    END IF;
+    IF NOT auth.admin_remove_user('root', 'capped') THEN
+        RAISE EXCEPTION 'FAIL: could not remove capped';
+    END IF;
+    RAISE NOTICE 'ok: the cap counts only active keys';
+END $$;
+
 --- The fingerprint is pinned to an outside computation, so a change of
 --- encoding here is caught rather than silently agreeing with itself.
 --- The key is RFC 8032's first ed25519 test vector; the fingerprint was

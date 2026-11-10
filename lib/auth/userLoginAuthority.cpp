@@ -464,10 +464,11 @@ public:
     {
           
         constexpr std::string_view query{
-           "SELECT auth.add_user_key($1, $2, $3, $4, NOW() + make_interval(secs => $5))"};
+           "SELECT auth.add_user_key($1, $2, $3, $4, NOW() + make_interval(secs => $5), $6)"};
         const pqxx::params parameters{user, keyName, publicKey,
                                       "ed25519",
-                                      expiresAfter.count()};
+                                      expiresAfter.count(),
+                                      mOptions.getMaximumNumberOfLoginKeys()};
         return withTransaction<pqxx::work>(
             [&](pqxx::work &transaction) -> bool
             {
@@ -969,6 +970,26 @@ UserLoginAuthority::addKey(
             "UserLoginAuthority could not classify verify password result");
         return std::unexpected(UserLoginAuthority::KeyError::ServerError);
     }
+    // Get the corresponding normalized name from the database
+    std::string userName;
+    try
+    { 
+        auto userNameResult = pImpl->getUserName(userNameAndPassword.first);
+        if (!userNameResult.has_value())
+        {
+            SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+            "UserLoginAuthority could not get user name from database");
+            return std::unexpected(UserLoginAuthority::KeyError::ServerError);
+        }
+        userName = std::move(*userNameResult);
+    }
+    catch (const std::exception &e)
+    {
+        SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+           "UserLoginAuthority {} appears to have disappeared", 
+           userNameAndPassword.first);
+        return std::unexpected(UserLoginAuthority::KeyError::ServerError);
+    }
     // Step 2: Verify signature (touch database above) 
     if (!::verifyAssertionSignature(publicKey, assertion))
     {
@@ -982,26 +1003,39 @@ UserLoginAuthority::addKey(
     const auto claims
         = ::parseAssertion(assertion,
                            std::chrono::system_clock::now(),
-                           pImpl->mOptions.getIssuer());
+                           pImpl->mOptions.getIssuer() + "/keys");
     if (claims == std::nullopt)
     {
         SPDLOG_LOGGER_WARN(pImpl->mLogger,
                            "Rejecting key login; bad or expired assertion");
         return std::unexpected(UserLoginAuthority::KeyError::InvalidKey);
     }
-    if (claims->subject != userNameAndPassword.first)
+    if (claims->subject != userName)
     {
         SPDLOG_LOGGER_WARN(pImpl->mLogger,
                            "Claim does not belong to this user");
         return std::unexpected(UserLoginAuthority::KeyError::InvalidKey);
     }
     // Step 4: Add to database
+    const auto &user = claims->subject;
     try
     {
+        std::chrono::seconds expires{
+            pImpl->mOptions.getMaximumLoginKeyTimeToLive()};
+        if (expiresAfter != std::nullopt)
+        { 
+            if (expiresAfter->count() < 1)
+            {
+                return std::unexpected(
+                   UserLoginAuthority::KeyError::InvalidExpiration);
+            }
+            expires = *expiresAfter;
+        }
 /*
         std::chrono::seconds expires;
-        pImpl->addUserKey(userNameAndPassword.first,
-                          publicKey,
+        pImpl->addUserKey(user,
+                          keyName,
+                          ::encodeBase64(publicKey),
                           assertion,
                           expires);
 */
@@ -1033,6 +1067,10 @@ UserLoginAuthority::addKey(
             }
             return std::unexpected(KeyError::InvalidKey);
         }
+        if (e.sqlstate() == "53400")
+        {
+            return std::unexpected(KeyError::TooManyKeys);
+        }
         SPDLOG_LOGGER_ERROR(pImpl->mLogger,
                             "Failed to add key because {}",
                             e.what());
@@ -1045,6 +1083,7 @@ UserLoginAuthority::addKey(
                             e.what());
         return std::unexpected(KeyError::ServerError);
     }
+    SPDLOG_LOGGER_INFO(pImpl->mLogger, "{} added key {}", userName, keyName);
     return {};
 }
 

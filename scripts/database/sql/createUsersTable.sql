@@ -319,11 +319,22 @@ CREATE INDEX user_keys_user_id_idx ON auth.user_keys(user_id);
 ---       is the step that would turn an e-mailed password -- or a
 ---       stolen one that an administrator has since reset -- into
 ---       permanent access.
+---   configuration_limit_exceeded (53400)  the user already has
+---       p_max_active_keys active keys.  Revoked and expired keys do not
+---       count, so revoking one makes room.
+---
+--- p_max_active_keys is the deployment's cap, passed in by the backend
+--- from its configuration; NULL means no cap, and 0 means no keys at
+--- all.  It is a parameter rather than a table so the backend's config
+--- file stays the one place the policy is set.
 ---
 --- The key name is trimmed and lowercased, like a user name.
+DROP FUNCTION IF EXISTS
+    auth.add_user_key(TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ);
 CREATE OR REPLACE FUNCTION auth.add_user_key(
     p_name TEXT, p_key_name TEXT, p_public_key TEXT,
-    p_algorithm TEXT DEFAULT 'ed25519', p_expires TIMESTAMPTZ DEFAULT NULL)
+    p_algorithm TEXT DEFAULT 'ed25519', p_expires TIMESTAMPTZ DEFAULT NULL,
+    p_max_active_keys INTEGER DEFAULT NULL)
 RETURNS BOOLEAN AS $$
 DECLARE v_user_id BIGINT;
         v_provisional TIMESTAMPTZ;
@@ -332,6 +343,11 @@ DECLARE v_user_id BIGINT;
         v_algorithm TEXT := lower(trim(p_algorithm));
         v_constraint TEXT;
 BEGIN
+    --- A misconfigured backend, not a user mistake.
+    IF p_max_active_keys < 0 THEN
+        RAISE EXCEPTION 'invalid key limit: % is negative', p_max_active_keys
+              USING ERRCODE = 'invalid_parameter_value';
+    END IF;
     IF v_key_name IS NULL OR v_key_name !~ '^[a-z0-9._@-]{1,64}$' THEN
         RAISE EXCEPTION 'invalid key name'
               USING ERRCODE = 'invalid_parameter_value',
@@ -346,8 +362,11 @@ BEGIN
         RAISE EXCEPTION 'invalid expiration: not in the future'
               USING ERRCODE = 'invalid_parameter_value';
     END IF;
+    --- FOR UPDATE serializes one user's adds, so two at once cannot both
+    --- count n - 1 active keys and both insert.
     SELECT user_id, provisional_until INTO v_user_id, v_provisional
-      FROM auth.users WHERE name = lower(trim(p_name));
+      FROM auth.users WHERE name = lower(trim(p_name))
+       FOR UPDATE;
     IF v_user_id IS NULL THEN
         RETURN FALSE;
     END IF;
@@ -363,6 +382,16 @@ BEGIN
                 WHERE user_id = v_user_id AND key_name = v_key_name) THEN
         RAISE EXCEPTION 'key name already in use'
               USING ERRCODE = 'duplicate_object';
+    END IF;
+    IF p_max_active_keys IS NOT NULL AND
+       (SELECT count(*) FROM auth.user_keys
+         WHERE user_id = v_user_id
+           AND revoked IS NULL
+           AND (expires IS NULL OR expires > NOW())) >= p_max_active_keys THEN
+        RAISE EXCEPTION 'too many active keys: the limit is %',
+                        p_max_active_keys
+              USING ERRCODE = 'configuration_limit_exceeded',
+                    HINT = 'Revoke a key you no longer use.';
     END IF;
     BEGIN
         INSERT INTO auth.user_keys

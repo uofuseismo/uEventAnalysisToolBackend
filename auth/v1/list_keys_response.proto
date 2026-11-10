@@ -3,18 +3,12 @@ import "google/protobuf/timestamp.proto";
 
 package UEventAnalysisToolAPI.Auth.V1;
 
+import "uEventAnalysisToolAPI/admin/v1/signature_algorithm.proto";
+
 /**
  * A list of the user's keys.
  */
 message ListKeysResponse {
-   // The key signature algorithm.
-   enum SignatureAlgorithm {
-      // Key signature algorithm unspecified. 
-      SIGNATURE_ALGORITHM_NOT_SPECIFIED = 0;
-      // Key signature algorithm is ed25519.
-      SIGNATURE_ALGORITHM_ED25519 = 1;
-   }   
-
    // A key the user may log in with.
    message ActiveKey {
       // The user's label for the key, e.g., laptop.  Unique per user.

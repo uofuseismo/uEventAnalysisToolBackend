@@ -107,11 +107,13 @@ public:
     (
         std::shared_ptr<UAuth::AdministratorLoginAuthority> loginAuthority,
         std::shared_ptr<UAuth::AdministratorTokenVerifier> adminTokenVerifier,
+        std::shared_ptr<UAuth::UserAdministration> userAdministration, 
         std::shared_ptr<UAuth::UserTokenVerifier> userTokenVerifier,
         std::shared_ptr<spdlog::logger> logger
     ) :
         mLoginAuthority(std::move(loginAuthority)),
         mAdministratorTokenVerifier(std::move(adminTokenVerifier)),
+        mUserAdministration(std::move(userAdministration)), 
         mUserTokenVerifier(std::move(userTokenVerifier)),
         mLogger(std::move(logger))
     {
@@ -130,6 +132,15 @@ public:
         if (!mAdministratorTokenVerifier->isInitialized())
         {
             throw std::invalid_argument("Admin token verifier not initialized");
+        }
+        if (mUserAdministration == nullptr)
+        {
+            throw std::invalid_argument("User administration class is null");
+        }
+        if (!mUserAdministration->isInitialized())
+        {
+            throw std::invalid_argument(
+                "User administration class not initialized");
         }
         if (mUserTokenVerifier == nullptr)
         {
@@ -168,12 +179,14 @@ AdminService::AdminService
 (
     std::shared_ptr<UAuth::AdministratorLoginAuthority> loginAuthority,
     std::shared_ptr<UAuth::AdministratorTokenVerifier> adminTokenVerifier,
+    std::shared_ptr<UAuth::UserAdministration> userAdministrator,
     std::shared_ptr<UAuth::UserTokenVerifier> userTokenVerifier,
     std::shared_ptr<spdlog::logger> logger
 ) :
     pImpl(std::make_unique<AdminServiceImpl>
           (std::move(loginAuthority),
            std::move(adminTokenVerifier),
+           std::move(userAdministrator),
            std::move(userTokenVerifier),
            std::move(logger)))
 {

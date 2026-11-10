@@ -134,7 +134,7 @@ public:
                 mLogger);
 
         mUserAdministration
-            = std::make_unique<UEAT::Auth::UserAdministration> (
+            = std::make_shared<UEAT::Auth::UserAdministration> (
                  mOptions.userAdminOptions,
                  mLogger);
 
@@ -151,6 +151,7 @@ public:
             = std::make_unique<UEAT::Services::AdminService>
               (mAdministratorLoginAuthority,
                mAdministratorTokenVerifier,
+               mUserAdministration,
                mUserTokenVerifier,
                mLogger); 
         servicesMap.insert(std::pair {"AdminService", std::move(adminService)});

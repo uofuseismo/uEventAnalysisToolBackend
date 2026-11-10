@@ -32,6 +32,7 @@ namespace UEventAnalysisToolBackend::Auth
 {
  class AdministratorLoginAuthority;
  class AdministratorTokenVerifier;
+ class UserAdministration;
  class UserTokenVerifier;
 }
 
@@ -50,12 +51,14 @@ public:
     /// @param[in] loginAuthority      Handles the database user/password
     ///                                interaction for admin actions.
     /// @param[in] adminTokenVerifier  Verifies admin tokens.
+    /// @param[in] userAdministration  Performs user administration actions.
     /// @param[in] userTokenVerifier   Verifies the user token for the initial
     ///                                login.
     /// @param[in] logger         The application logger.
     AdminService(
         std::shared_ptr<UEventAnalysisToolBackend::Auth::AdministratorLoginAuthority> loginAuthority,
         std::shared_ptr<UEventAnalysisToolBackend::Auth::AdministratorTokenVerifier> adminTokenVerifier,
+        std::shared_ptr<UEventAnalysisToolBackend::Auth::UserAdministration> userAdministration,
         std::shared_ptr<UEventAnalysisToolBackend::Auth::UserTokenVerifier> userTokenVerifier,
         std::shared_ptr<spdlog::logger> logger);
 

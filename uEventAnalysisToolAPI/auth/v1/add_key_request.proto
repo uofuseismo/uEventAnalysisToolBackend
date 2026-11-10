@@ -1,24 +1,24 @@
 edition = "2023";
+import "google/protobuf/timestamp.proto";
 
 package UEventAnalysisToolAPI.Auth.V1;
+
+import "uEventAnalysisToolAPI/admin/v1/signature_algorithm.proto";
 
 /**
  * Allows the user to add their PUBLIC key.  Their user name and password
  * are specified in the in the Authorization header.
  */
 message AddKeyRequest {
-   // The key algorithm.
-   enum Algorithm {
-      // Key algorithm not set - this is not valid.
-      ALGORITHM_NOT_SPECIFIED = 0;
-      // This is an ed25519 key.
-      ALGORITHM_ED25519 = 1;
-   }
-
    // The name of the key - e.g., sams-laptop
    string name = 1;
    // The public key.
-   string public_key = 2;
+   bytes public_key = 2;
+   // An assertion to prove possesion of a corresponding private key.
+   string assertion = 3;
+   // When the user would like their to expire.  This MAY BE UNDEFINED
+   // in which case the key will not expire.
+   google.protobuf.Timestamp expires_after = 4;
    // The key algorithm.
-   Algorithm algorithm = 3;
+   SignatureAlgorithm algorithm = 5;
 }

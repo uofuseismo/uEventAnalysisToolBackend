@@ -3,7 +3,8 @@ edition = "2023";
 package UEventAnalysisToolAPI.Auth.V1;
 
 /**
- * User login request with an ed25519 public key.
+ * User login request with an ed25519 public key.  Additionally,
+ * the client will pass the frontend version in the x-client-version header.
  */
 message LoginWithKeyRequest {
    // The user's PUBLIC key.  This should be length 32U. 
@@ -11,7 +12,5 @@ message LoginWithKeyRequest {
    // A compact JSON Web Signature signed by the client using the
    // EdDSA algorithm.
    string assertion = 2;
-   // The frontend version.
-   string version = 3;
 }
 

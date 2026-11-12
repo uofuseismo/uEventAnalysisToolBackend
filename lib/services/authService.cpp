@@ -116,6 +116,42 @@ grpc::Status enumToStatus(const UAuth::UserLoginAuthority::KeyError code,
     return {grpc::StatusCode::INTERNAL,
             "Unhandled status code - server error - contact maintainer"};
 }
+
+[[nodiscard]] std::optional<grpc::Status> checkClientVersion(
+    grpc::CallbackServerContext &context,
+    const std::optional<UEventAnalysisToolBackend::GRPC::ClientVersion>
+        &minimumClientVersion)
+{
+    if (minimumClientVersion == std::nullopt){return std::nullopt;}
+    const auto &metadata = context.client_metadata();
+    const auto header = metadata.find("x-client-version");
+    if (header == metadata.end())
+    {
+        context.AddTrailingMetadata("x-minimum-client-version",
+                                    minimumClientVersion->toString());
+        return grpc::Status {grpc::StatusCode::INVALID_ARGUMENT,
+                             "x-client-version not set in header"};
+    }
+    const auto clientVersion
+        = UEventAnalysisToolBackend::GRPC::ClientVersion::parse(
+              std::string_view {header->second.data(),
+                                header->second.size()});
+    if (!clientVersion)
+    {
+        return grpc::Status {grpc::StatusCode::INVALID_ARGUMENT,
+                             "x-client-version must be MAJOR.MINOR.PATCH"};
+    }
+    if (*clientVersion < *minimumClientVersion)
+    {
+        context.AddTrailingMetadata("x-minimum-client-version",
+                                    minimumClientVersion->toString());
+        return grpc::Status {grpc::StatusCode::FAILED_PRECONDITION,
+                             "x-client-version must be at least "
+                           + minimumClientVersion->toString()};
+    }
+    return std::nullopt;
+}
+
 }
 
 class AuthService::AuthServiceImpl
@@ -204,36 +240,18 @@ grpc::ServerUnaryReactor
             // Check min version
             if (minimumClientVersion != std::nullopt)
             {
-                auto header 
-                    = context->client_metadata().find("x-client-version");
-                if (header == context->client_metadata().end())
+                auto versionResponse
+                     = checkClientVersion(*context, minimumClientVersion);
+                if (versionResponse != std::nullopt)
                 {
-                    context->AddTrailingMetadata(
-                        "x-minimum-client-version",
-                        minimumClientVersion->toString());
-                    Finish({grpc::StatusCode::INVALID_ARGUMENT,
-                            "x-client-version not set in header"});
+                    SPDLOG_LOGGER_WARN(mLogger,
+                                       "{} refused - {}",
+                                       requestIdentifier,
+                                       versionResponse->error_message());
+                    Finish(*versionResponse);
                     return;
-                }
-                const auto clientVersion
-                    = GRPC::ClientVersion::parse(
-                          std::string_view {header->second.data(),
-                                            header->second.size()});
-                if (!clientVersion)
-                {
-                    Finish({grpc::StatusCode::INVALID_ARGUMENT,
-                            "x-client-version must be MAJOR.MINOR.PATCH"});
-                    return;
-                }
-                if (clientVersion < *minimumClientVersion)
-                {
-                    Finish({grpc::StatusCode::FAILED_PRECONDITION,
-                           "x-client-version must be at least "
-                          + minimumClientVersion->toString()});
-                    return;
-                }
+                } 
             }
-
             // Extract the username and password from Basic
             auto basicField = context->client_metadata().find("authorization");
             if (basicField == context->client_metadata().end())
@@ -392,38 +410,20 @@ grpc::ServerUnaryReactor
             mLogger(std::move(logger))
         {
             auto requestIdentifier = GRPC::toRequestIdentifier(*context);
-
             // Check min version
             if (minimumClientVersion != std::nullopt)
             {
-                auto header 
-                    = context->client_metadata().find("x-client-version");
-                if (header == context->client_metadata().end())
-                {
-                    context->AddTrailingMetadata(
-                        "x-minimum-client-version",
-                        minimumClientVersion->toString());
-                    Finish({grpc::StatusCode::INVALID_ARGUMENT,
-                            "x-client-version not set in header"});
+                auto versionResponse
+                     = checkClientVersion(*context, minimumClientVersion);
+                if (versionResponse != std::nullopt)
+                {    
+                    SPDLOG_LOGGER_WARN(mLogger,
+                                       "{} refused - {}",
+                                       requestIdentifier,
+                                       versionResponse->error_message());
+                    Finish(*versionResponse);
                     return;
-                }
-                const auto clientVersion
-                    = GRPC::ClientVersion::parse(
-                          std::string_view {header->second.data(),
-                                            header->second.size()});
-                if (!clientVersion)
-                {
-                    Finish({grpc::StatusCode::INVALID_ARGUMENT,
-                            "x-client-version must be MAJOR.MINOR.PATCH"});
-                    return;
-                }
-                if (clientVersion < *minimumClientVersion)
-                {
-                    Finish({grpc::StatusCode::FAILED_PRECONDITION,
-                           "x-client-version must be at least "
-                          + minimumClientVersion->toString()});
-                    return;
-                }
+                }    
             }
 
             if (!request.has_public_key())

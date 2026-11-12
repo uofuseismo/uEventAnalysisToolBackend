@@ -501,7 +501,8 @@ public:
                 {
                     Detail::appendKey(row, &activeKeys, &inactiveKeys);
                 }
-                return std::pair{activeKeys, inactiveKeys};
+                return std::move(std::pair{std::move(activeKeys), 
+                                           std::move(inactiveKeys)});
             });
     }
 

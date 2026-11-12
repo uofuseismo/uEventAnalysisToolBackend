@@ -144,6 +144,7 @@ public:
         std::unique_ptr<grpc::Service> authService
             = std::make_unique<UEAT::Services::AuthService>
               (mUserLoginAuthority,
+               mUserTokenVerifier,
                mLogger); 
         servicesMap.insert(std::pair {"AuthService", std::move(authService)});
 

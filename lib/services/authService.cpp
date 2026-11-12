@@ -1,7 +1,6 @@
 #include <chrono>
 #include <exception>
 #include <memory>
-#include <optional>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -17,6 +16,7 @@
 #include "uEventAnalysisToolBackend/services/authService.hpp"
 #include "uEventAnalysisToolBackend/auth/authenticator.hpp"
 #include "uEventAnalysisToolBackend/auth/userLoginAuthority.hpp"
+#include "uEventAnalysisToolBackend/auth/userTokenVerifier.hpp"
 #include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
 #include "uEventAnalysisToolBackend/grpc/parseAuthorizationHeader.hpp"
 #include "uEventAnalysisToolBackend/grpc/requireBearer.hpp"
@@ -42,9 +42,11 @@ public:
     AuthServiceImpl
     (
         std::shared_ptr<UAuth::UserLoginAuthority> loginAuthority,
+        std::shared_ptr<UAuth::UserTokenVerifier> tokenVerifier,
         std::shared_ptr<spdlog::logger> logger
     ) :
         mLoginAuthority(std::move(loginAuthority)),
+        mTokenVerifier(std::move(tokenVerifier)),
         mLogger(std::move(logger))
     {
         if (mLoginAuthority == nullptr)
@@ -55,6 +57,14 @@ public:
         {
             throw std::invalid_argument("Login authority not initialized");
         }   
+        if (mTokenVerifier == nullptr)
+        {
+            throw std::invalid_argument("Token verifier is null");
+        }
+        if (!mTokenVerifier->isInitialized())
+        {
+            throw std::invalid_argument("Token verifier not initialized");
+        }
         if (mLogger == nullptr)
         {
             // NOLINTBEGIN(misc-include-cleaner)
@@ -69,6 +79,7 @@ public:
     }
 //private:
     std::shared_ptr<UAuth::UserLoginAuthority> mLoginAuthority{nullptr};
+    std::shared_ptr<UAuth::UserTokenVerifier> mTokenVerifier{nullptr};
     std::shared_ptr<spdlog::logger> mLogger{nullptr};
 };
 
@@ -76,10 +87,12 @@ public:
 AuthService::AuthService
     (
         std::shared_ptr<UAuth::UserLoginAuthority> loginAuthority,
+        std::shared_ptr<UAuth::UserTokenVerifier> tokenVerifier,
         std::shared_ptr<spdlog::logger> logger
     ) :
     pImpl(std::make_unique<AuthServiceImpl>
           (std::move(loginAuthority),
+           std::move(tokenVerifier),
            std::move(logger)))//,
     //UEventAnalysisToolAPI::Auth::V1::AuthService::CallbackService {}
 {

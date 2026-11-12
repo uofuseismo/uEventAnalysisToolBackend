@@ -25,6 +25,7 @@ namespace UEventAnalysisToolAPI::Auth::V1
 namespace UEventAnalysisToolBackend::Auth
 {
  class UserLoginAuthority;
+ class UserTokenVerifier;
 }
 
 namespace UEventAnalysisToolBackend::Services
@@ -40,8 +41,12 @@ class AuthService final :
 {
 public:
     /// @brief Constructor
+    /// @param[in] loginAuthority   The user login authority - handles database
+    ///                             interactions.
+    /// @param[in] tokenVerifier    The user token verifier. 
     /// @param[in] logger   The application logger.
     AuthService(std::shared_ptr<UEventAnalysisToolBackend::Auth::UserLoginAuthority> loginAuthority,
+                std::shared_ptr<UEventAnalysisToolBackend::Auth::UserTokenVerifier> tokenVerifier,
                 std::shared_ptr<spdlog::logger> logger);
 
     grpc::ServerUnaryReactor

@@ -10,6 +10,8 @@
 #include "uEventAnalysisToolBackend/auth/userList.hpp"
 #include <uEventAnalysisToolAPI/admin/v1/list_users_response.pb.h>
 #include <uEventAnalysisToolAPI/admin/v1/permission.pb.h>
+#include <uEventAnalysisToolAPI/auth/v1/list_keys_response.pb.h>
+#include <uEventAnalysisToolAPI/auth/v1/signature_algorithm.pb.h>
 
 using namespace UEventAnalysisToolBackend::Auth;
 namespace UEATAPIV1 = UEventAnalysisToolAPI::Admin::V1;
@@ -467,6 +469,43 @@ ActiveKey::toMessage() const
     return result;
 }
 
+template<>
+UEventAnalysisToolAPI::Auth::V1::ListKeysResponse::ActiveKey
+ActiveKey::toMessage() const
+{
+    UEventAnalysisToolAPI::Auth::V1::ListKeysResponse::ActiveKey result;
+    result.set_name(getName());
+    *result.mutable_registered()
+        = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
+             getWhenRegistered().count());
+    result.set_fingerprint(getFingerprint());
+    auto expiration = getExpiration();
+    if (expiration != std::nullopt)
+    {
+        *result.mutable_expires()
+            = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
+                  expiration->count());
+    }
+    auto lastUsed = getLastUsed();
+    if (lastUsed != std::nullopt)
+    {
+        *result.mutable_last_used()
+            = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
+                  lastUsed->count());
+    }
+    auto algorithm = getAlgorithm();
+    if (algorithm == ActiveKey::Algorithm::ed25519)
+    {
+        result.set_algorithm(
+           UEventAnalysisToolAPI::Auth::V1::SIGNATURE_ALGORITHM_ED25519);
+    }
+    else
+    {
+        throw std::runtime_error("Unhandled key signature algorithm");
+    }
+    return result;
+}
+
 ///--------------------------------Inactive Key------------------------------///
 class InactiveKey::InactiveKeyImpl
 {
@@ -714,6 +753,56 @@ InactiveKey::toMessage() const
            UEATAPIV1::ListUsersResponse_InactiveKey_Reason_REASON_EXPIRED);
     }
     else
+    {
+        throw std::runtime_error("Unhandled reason");
+    }
+    return result;
+}
+
+template<>
+UEventAnalysisToolAPI::Auth::V1::ListKeysResponse::InactiveKey
+InactiveKey::toMessage() const
+{
+    UEventAnalysisToolAPI::Auth::V1::ListKeysResponse::InactiveKey result;
+    result.set_name(getName());
+    *result.mutable_registered()
+        = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
+             getWhenRegistered().count());
+    result.set_fingerprint(getFingerprint());
+    *result.mutable_invalidated()
+        = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
+                  getWhenInvalidated().count());
+    auto lastUsed = getLastUsed();
+    if (lastUsed != std::nullopt)
+    {
+        *result.mutable_last_used()
+            = google::protobuf::util::TimeUtil::MicrosecondsToTimestamp(
+                  lastUsed->count());
+    }
+    auto algorithm = getAlgorithm();
+    if (algorithm == InactiveKey::Algorithm::ed25519)
+    {
+        result.set_algorithm(
+           UEventAnalysisToolAPI::Auth::V1::SIGNATURE_ALGORITHM_ED25519);
+    }
+    else
+    {
+        throw std::runtime_error("Unhandled key signature algorithm");
+    }
+    auto reason = getReason();
+    if (reason == InactiveKey::Reason::Revoked)
+    {
+        result.set_reason(
+            UEventAnalysisToolAPI::Auth::V1::
+            ListKeysResponse_InactiveKey_Reason_REASON_REVOKED);
+    }
+    else if (reason == InactiveKey::Reason::Expired)
+    {
+        result.set_reason(
+            UEventAnalysisToolAPI::Auth::V1::
+            ListKeysResponse_InactiveKey_Reason_REASON_EXPIRED);
+    }
+    else 
     {
         throw std::runtime_error("Unhandled reason");
     }

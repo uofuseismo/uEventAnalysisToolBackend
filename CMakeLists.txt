@@ -325,6 +325,7 @@ if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
                   testing/auth/tokenVerifierOptions.cpp
                   testing/auth/tokenVerifiers.cpp
                   testing/services/adminService.cpp
+                  testing/services/authService.cpp
                   testing/database/credentials.cpp
                   testing/database/aqms.cpp
                   testing/grpc/grpcServerOptions.cpp

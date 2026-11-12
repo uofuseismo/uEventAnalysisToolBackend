@@ -1,23 +1,33 @@
 name: Build
-run-name: Build and test ${{ github.ref_name }}
+run-name: Build, test, and package ${{ github.ref_name }}
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-  # A manual trigger, for when a runner or Conan Center was down rather
-  # than the code being wrong.
+  # Rebuilds on an unchanged tree so the image picks up base-image
+  # security updates.  FROM ubuntu:26.04 re-resolves and apt-get upgrade
+  # runs on a fresh runner with no layer cache, so this is a real rebuild.
+  schedule:
+    # Off the hour deliberately - scheduled runs queue heavily at :00.
+    # UTC.  Note GitHub disables scheduled workflows after 60 days with
+    # no repository activity, and emails the owner when it does.
+    - cron: '47 9 * * *'
+  # A manual trigger, for when a runner, Conan Center, or the registry
+  # was down rather than the code being wrong.
   workflow_dispatch:
 
-# A newer push to the same branch supersedes this one.  Safe while the
-# pipeline only builds and tests; revisit when it pushes images, where a
-# run cut off mid-push leaves a tag half-written.
+# A newer push to a pull request supersedes the run in progress.  Runs on
+# main are never cut off: one that is already pushing should finish
+# rather than leave a tag half-written.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
+  CONTAINER_NAME: ueventanalysistoolbackend
+  QUAY_DIRECTORY: ueventanalysistoolbackend
   BUILD_TYPE: Release
   # Whatever clang the image ships.  The language version is what the
   # code depends on, and that is pinned below with compiler.cppstd.
@@ -100,7 +110,7 @@ jobs:
       # travels with the artifact - nothing to copy.
       - name: Configure preset and build
         run: |
-          cmake --preset conan-release -DWITH_CONAN=ON -DUSE_CLANG_TIDY=ON
+          cmake --preset conan-release -DWITH_CONAN=ON -DUSE_CLANG_TIDY=ON -DBUILD_CONTAINER=ON
           cmake --build --preset conan-release
           cp CMakeUserPresets.json build
 
@@ -187,3 +197,74 @@ jobs:
           UEAT_TEST_DB_SUPERUSER: postgres
           UEAT_TEST_DB_SUPERUSER_PASSWORD: postgres
         run: ./build/Release/unitTests "[integration]"
+
+  # Only what reached main, or a scheduled or manual rebuild of it, is
+  # published.  A pull request never pushes an image - and could not:
+  # the registry secrets are withheld from pull requests from forks.
+  package:
+    needs: test
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: ${{ matrix.distro }}
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [ubuntu-26.04]
+    name: Package on ${{ matrix.distro }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Prepare package environment
+        uses: ./.github/actions/prepare-package-environment
+
+      - name: Download build directory
+        uses: ./.github/actions/download-build-directory
+
+      - name: Package tgz
+        run: |
+          mv build/CMakeUserPresets.json ./
+          cd build/Release
+          mkdir -p artifacts
+          cpack -B artifacts -G TGZ
+
+      - name: Build and push image
+        env:
+          QUAY_ROBOT_PASSWORD: ${{ secrets.QUAY_ROBOT_PASSWORD }}
+          QUAY_ROBOT_USER: ${{ secrets.QUAY_ROBOT_USER }}
+        run: |
+          set -euo pipefail
+          echo "${QUAY_ROBOT_PASSWORD}" | buildah login -u "${QUAY_ROBOT_USER}" --password-stdin quay.io
+          cd build/Release
+          cp artifacts/*.tar.gz ./
+          version=$(ls *.tar.gz | sed 's/uEventAnalysisToolBackend-//g' | sed 's/-Linux.tar.gz//g')
+          echo "Will build container version ${version}"
+          # The commit rides along as a label, so an image can be traced
+          # to its source without another tag.
+          buildah bud --label org.opencontainers.image.revision=${GITHUB_SHA} \
+                      -t ${CONTAINER_NAME}:${version} -t ${CONTAINER_NAME}:latest \
+                      -f ./Dockerfile.u26
+          # Two names for one image.  The plain version tag is what the
+          # Deployment references and what imagePullPolicy: Always
+          # follows; the dated one never appears in a manifest and exists
+          # so a running pod's digest can be traced to a build, and so
+          # yesterday's image is still reachable if a base update breaks
+          # something.
+          dated="${version}-$(date -u +%Y%m%d)"
+          buildah tag ${CONTAINER_NAME}:${version} quay.io/uuss/${QUAY_DIRECTORY}:${version}
+          buildah tag ${CONTAINER_NAME}:${version} quay.io/uuss/${QUAY_DIRECTORY}:${dated}
+          # Retry a transient registry failure, but FAIL the step when
+          # every attempt fails.  A loop that just falls through leaves a
+          # green pipeline and a stale tag in the registry, which looks
+          # exactly like a working deploy until something reads the
+          # binary.
+          push_tag() {
+            for i in 1 2 3; do
+              buildah push "$1" && return 0
+              echo "Push of $1 failed (attempt $i); retrying"
+              sleep 15
+            done
+            echo "ERROR: could not push $1 after 3 attempts"
+            return 1
+          }
+          push_tag quay.io/uuss/${QUAY_DIRECTORY}:${version}
+          push_tag quay.io/uuss/${QUAY_DIRECTORY}:${dated}

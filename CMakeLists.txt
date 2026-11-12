@@ -398,3 +398,42 @@ install(FILES
         ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
 
+##########################################################################################
+#                                     CPack Packaging                                    #
+##########################################################################################
+# The tarball is what the container is built from: Dockerfile.u26 expects
+# ${PROJECT_NAME}-${PROJECT_VERSION}-Linux.tar.gz, which is CPack's default
+# name for a TGZ on Linux.
+set(CPACK_PACKAGE_NAME ${PROJECT_NAME})
+set(CPACK_PACKAGE_VENDOR "UUSS")
+set(CPACK_PACKAGE_CONTACT "ben.baker@utah.edu")
+set(CPACK_PACKAGE_LICENSE "MIT")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A backend for the uEvent Analysis Tool at UUSS.")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY ${CPACK_PACKAGE_NAME})
+set(CPACK_VERBATIM_VARIABLES YES)
+set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
+set(CPACK_GENERATOR TGZ)
+include(CPack)
+
+##########################################################################################
+#                                        Containers                                      #
+##########################################################################################
+if (${BUILD_CONTAINER})
+   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/scripts/Dockerfile.u26.in
+                  ${CMAKE_CURRENT_BINARY_DIR}/Dockerfile.u26 @ONLY)
+   find_program(buildah_EXECUTABLE buildah)
+   if (buildah_EXECUTABLE)
+      # Local convenience: cmake --build . --target buildah
+      add_custom_target(buildah
+                        COMMENT "Preparing the container with buildah"
+                        COMMAND ${CMAKE_CPACK_COMMAND} -G TGZ
+                        COMMAND ${buildah_EXECUTABLE} bud -t ueventanalysistoolbackend:${PROJECT_VERSION} -t ueventanalysistoolbackend:latest -f ./Dockerfile.u26
+                        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} VERBATIM)
+      add_dependencies(buildah uEventAnalysisToolBackend)
+   endif()
+endif()
+

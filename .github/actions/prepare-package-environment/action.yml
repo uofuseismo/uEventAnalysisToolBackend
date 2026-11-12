@@ -1,0 +1,15 @@
+name: prepare-environment
+description: Prepares the packaging environment
+runs:
+  using: "composite"
+  steps:
+    # cpack comes with cmake; buildah builds and pushes the image.
+    - name: Prepare environment
+      run: |
+        mkdir -p ${{github.workspace}}/build
+        sudo apt-get update -y
+        sudo apt-get install -y --no-install-recommends \
+           tar \
+           cmake \
+           buildah
+      shell: bash

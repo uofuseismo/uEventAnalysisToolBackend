@@ -1,5 +1,7 @@
 #ifndef UEVENT_ANALYSIS_TOOL_BACKEND_TESTING_AUTH_USER_SEEDER_HPP
 #define UEVENT_ANALYSIS_TOOL_BACKEND_TESTING_AUTH_USER_SEEDER_HPP
+#include <chrono>
+#include <cstdint>
 #include <exception>
 #include <iostream>
 #include <memory>
@@ -160,6 +162,31 @@ public:
                                 " WHERE key_name = $2",
                                 pqxx::params {name, keyName})
                           .one_row()[0].as<std::string> ();
+    }
+    /// @result True if the user has a key by this name, active or not.
+    [[nodiscard]] bool hasKey(const std::string &name,
+                              const std::string &keyName)
+    {
+        pqxx::nontransaction transaction{*mConnection};
+        return transaction.exec("SELECT EXISTS (SELECT 1"
+                                "  FROM auth.list_user_keys($1)"
+                                " WHERE key_name = $2)",
+                                pqxx::params {name, keyName})
+                          .one_row()[0].as<bool> ();
+    }
+    /// @result How long until the key expires, or nothing if it never does.
+    [[nodiscard]] std::optional<std::chrono::seconds>
+        keyExpiresIn(const std::string &name, const std::string &keyName)
+    {
+        pqxx::nontransaction transaction{*mConnection};
+        const auto row
+            = transaction.exec("SELECT EXTRACT(EPOCH FROM expires - NOW())"
+                               "         ::BIGINT"
+                               "  FROM auth.list_user_keys($1)"
+                               " WHERE key_name = $2",
+                               pqxx::params {name, keyName}).one_row();
+        if (row[0].is_null()){return std::nullopt;}
+        return std::chrono::seconds {row[0].as<int64_t> ()};
     }
     /// @brief Removes a user someone else created - e.g., the class under
     ///        test - along with the seeded ones.

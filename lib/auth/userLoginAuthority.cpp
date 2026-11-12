@@ -24,9 +24,10 @@
 #include "uEventAnalysisToolBackend/auth/authenticator.hpp"
 #include "uEventAnalysisToolBackend/auth/userLoginAuthorityOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/hasher.hpp"
+// NOLINTNEXTLINE(misc-include-cleaner)
 #include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
-#include "uEventAnalysisToolBackend/auth/userList.hpp"
+//#include "uEventAnalysisToolBackend/auth/userList.hpp"
 #include "databaseUtilities.hpp"
 
 using namespace UEventAnalysisToolBackend::Auth;
@@ -477,8 +478,22 @@ public:
                 transaction.commit();
                 return added;
             });                   
+    }
 
-
+    /// @result  True indicates the user's key was revoked.
+    [[nodiscard]] bool revokeUserKey(const std::string &user,
+                                     const std::string &keyName)
+    {
+        constexpr std::string_view query{"SELECT auth.revoke_user_key($1, $2)"};
+        const pqxx::params parameters{user, keyName};
+        return withTransaction<pqxx::work>(
+            [&](pqxx::work &transaction) -> bool
+            {
+                auto row = transaction.exec(query, parameters).one_row();
+                const auto revoked = row.at(0).as<bool> ();
+                transaction.commit();
+                return revoked;
+            });
     }
 
     // @result The key owner (user) name if the key is active (i.e., exists and
@@ -978,16 +993,15 @@ UserLoginAuthority::addKey(
         if (!userNameResult.has_value())
         {
             SPDLOG_LOGGER_ERROR(pImpl->mLogger,
-            "UserLoginAuthority could not get user name from database");
+                "Could not get user name from database");
             return std::unexpected(UserLoginAuthority::KeyError::ServerError);
         }
         userName = std::move(*userNameResult);
     }
     catch (const std::exception &e)
     {
-        SPDLOG_LOGGER_ERROR(pImpl->mLogger,
-           "UserLoginAuthority {} appears to have disappeared", 
-           userNameAndPassword.first);
+        SPDLOG_LOGGER_ERROR(pImpl->mLogger, "User look up failed because {}",
+                            e.what());
         return std::unexpected(UserLoginAuthority::KeyError::ServerError);
     }
     // Step 2: Verify signature (touch database above) 
@@ -1026,11 +1040,15 @@ UserLoginAuthority::addKey(
         {
             if (expiresAfter->count() < 1)
             {
+                SPDLOG_LOGGER_DEBUG(pImpl->mLogger,
+                                    "Invalid key - non positive duration");
                 return std::unexpected(
                     UserLoginAuthority::KeyError::InvalidExpiration);
             }
             if (*expiresAfter > pImpl->mOptions.getMaximumLoginKeyTimeToLive())
             {
+                SPDLOG_LOGGER_WARN(pImpl->mLogger,
+                                   "Invalid key - exceeds maximum duration");
                 return std::unexpected(
                     UserLoginAuthority::KeyError::InvalidExpiration);
             }
@@ -1071,6 +1089,7 @@ UserLoginAuthority::addKey(
             }
             if (message.find("invalid expiration") != std::string_view::npos)
             {
+                SPDLOG_LOGGER_DEBUG(pImpl->mLogger, "Invalid expiration");
                 return std::unexpected(KeyError::InvalidExpiration);
             }
             return std::unexpected(KeyError::InvalidKey);
@@ -1095,7 +1114,7 @@ UserLoginAuthority::addKey(
     return {};
 }
 
-/// Change the user name and password
+/// Let user revoke one of their keys
 std::expected<void, UserLoginAuthority::KeyError>
 UserLoginAuthority::revokeKey(
     const std::string &user,
@@ -1108,12 +1127,57 @@ UserLoginAuthority::revokeKey(
         return std::unexpected(
            UserLoginAuthority::KeyError::ServerError);
     }
+    if (user.empty())
+    {
+        return std::unexpected(
+            UserLoginAuthority::KeyError::Unauthenticated);
+    }
     if (keyName.empty())
     {
         return std::unexpected(
-           UserLoginAuthority::KeyError::NoKeyFound);
+            UserLoginAuthority::KeyError::NoKeyFound);
     } 
-
+    // Get the corresponding normalized name from the database
+    std::string userName;
+    try
+    {
+        auto userNameResult = pImpl->getUserName(user);
+        if (!userNameResult.has_value())
+        {
+            SPDLOG_LOGGER_WARN(pImpl->mLogger,
+            "Could not get user name {} from database", user);
+            return std::unexpected(
+               UserLoginAuthority::KeyError::Unauthenticated);
+        }
+        userName = std::move(*userNameResult);
+    }
+    catch (const std::exception &e)
+    {
+        SPDLOG_LOGGER_ERROR(pImpl->mLogger, "User lookup failed because {}",
+                            e.what());
+        return std::unexpected(UserLoginAuthority::KeyError::ServerError);
+    }
+    try
+    {
+        auto revoked = pImpl->revokeUserKey(userName, keyName);
+        if (!revoked)
+        {
+            SPDLOG_LOGGER_WARN(pImpl->mLogger,
+                               "{} has no active key {}", userName, keyName);
+            return std::unexpected(
+               UserLoginAuthority::KeyError::NoKeyFound);
+        }
+        SPDLOG_LOGGER_INFO(pImpl->mLogger,
+                           "{} revoked key {}", userName, keyName);
+    }
+    catch (const std::exception &e)
+    {
+        SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+                            "Failed to revoke key for {} because {}",
+                            user, e.what());
+        return std::unexpected(
+           UserLoginAuthority::KeyError::ServerError);
+    }
     return {};
 }
 

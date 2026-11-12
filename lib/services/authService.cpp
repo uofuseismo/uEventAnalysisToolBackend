@@ -1,7 +1,9 @@
 #include <chrono>
 #include <exception>
 #include <memory>
+#include <optional>
 #include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 #include <spdlog/spdlog.h>
@@ -15,26 +17,104 @@
 #include <jwt-cpp/traits/boost-json/traits.h>
 #include "uEventAnalysisToolBackend/services/authService.hpp"
 #include "uEventAnalysisToolBackend/auth/authenticator.hpp"
+#include "uEventAnalysisToolBackend/auth/userList.hpp"
 #include "uEventAnalysisToolBackend/auth/userLoginAuthority.hpp"
 #include "uEventAnalysisToolBackend/auth/userTokenVerifier.hpp"
 #include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
 #include "uEventAnalysisToolBackend/grpc/parseAuthorizationHeader.hpp"
 #include "uEventAnalysisToolBackend/grpc/requireBearer.hpp"
 #include "uEventAnalysisToolBackend/grpc/toRequestIdentifier.hpp"
+#include "uEventAnalysisToolBackend/grpc/unaryReactor.hpp"
 #include <uEventAnalysisToolAPI/auth/v1/service.grpc.pb.h>
+#include <uEventAnalysisToolAPI/auth/v1/add_key_request.pb.h>
+#include <uEventAnalysisToolAPI/auth/v1/add_key_response.pb.h>
 #include <uEventAnalysisToolAPI/auth/v1/change_password_request.pb.h>
 #include <uEventAnalysisToolAPI/auth/v1/change_password_response.pb.h>
+#include <uEventAnalysisToolAPI/auth/v1/list_keys_request.pb.h>
+#include <uEventAnalysisToolAPI/auth/v1/list_keys_response.pb.h>
 #include <uEventAnalysisToolAPI/auth/v1/login_with_key_request.pb.h>
 #include <uEventAnalysisToolAPI/auth/v1/login_with_key_response.pb.h>
 #include <uEventAnalysisToolAPI/auth/v1/login_with_password_request.pb.h>
 #include <uEventAnalysisToolAPI/auth/v1/login_with_password_response.pb.h>
 #include <uEventAnalysisToolAPI/auth/v1/get_password_requirements_request.pb.h>
 #include <uEventAnalysisToolAPI/auth/v1/password_requirements.pb.h>
-
+#include <uEventAnalysisToolAPI/auth/v1/revoke_key_request.pb.h>
+#include <uEventAnalysisToolAPI/auth/v1/revoke_key_response.pb.h>
+#include <uEventAnalysisToolAPI/auth/v1/signature_algorithm.pb.h>
 
 using namespace UEventAnalysisToolBackend::Services;
 
 namespace UAuth = UEventAnalysisToolBackend::Auth;
+
+namespace
+{
+grpc::Status enumToStatus(const UAuth::UserLoginAuthority::KeyError code,
+                          const std::string &keyName)
+{
+    if (code ==
+        UAuth::UserLoginAuthority::KeyError::Unauthenticated)
+    {
+        return {grpc::StatusCode::UNAUTHENTICATED,
+                "Invalid credentials"};
+    }
+    else if (code ==
+             UAuth::UserLoginAuthority::KeyError::PasswordChangeRequired)
+    {
+        return {grpc::StatusCode::FAILED_PRECONDITION,
+                "Password change required before adding a key"};
+    }
+    else if (code ==
+             UAuth::UserLoginAuthority::KeyError::InvalidName)
+    {
+        return {grpc::StatusCode::INVALID_ARGUMENT,
+                "Invalid key name - use 1 to 64 of a-z, 0-9, '.', '_', '@', '-'"};
+    }
+    else if (code ==
+             UAuth::UserLoginAuthority::KeyError::InvalidKey)
+    {
+        return {grpc::StatusCode::INVALID_ARGUMENT,
+                "Invalid public key or proof of possession"};
+    }
+    else if (code ==
+             UAuth::UserLoginAuthority::KeyError::InvalidExpiration)
+    {
+        return {grpc::StatusCode::INVALID_ARGUMENT,
+                "Invalid expiration - must be positive and within the maximum key lifetime"};
+    }
+    else if (code ==
+             UAuth::UserLoginAuthority::KeyError::NameInUse)
+    {
+        return {grpc::StatusCode::ALREADY_EXISTS,
+                "Key " + keyName + " already exists"};
+    }
+    else if (code ==
+             UAuth::UserLoginAuthority::KeyError::KeyInUse)
+    {
+        return {grpc::StatusCode::ALREADY_EXISTS,
+                "Public key is already registered"};
+    }
+    else if (code ==
+             UAuth::UserLoginAuthority::KeyError::NoKeyFound)
+    {
+        return {grpc::StatusCode::NOT_FOUND,
+                "No active key named " + keyName};
+    }
+    else if (code ==
+             UAuth::UserLoginAuthority::KeyError::TooManyKeys)
+    {
+        return {grpc::StatusCode::RESOURCE_EXHAUSTED,
+                "Active key limit reached - revoke a key first"};
+    }
+    else if (code ==
+             UAuth::UserLoginAuthority::KeyError::ServerError)
+    {
+        return {grpc::StatusCode::INTERNAL,
+                "Server error - contact maintainer"};
+    }
+    return {grpc::StatusCode::INTERNAL,
+            "Unhandled status code - server error - contact maintainer"};
+}
+}
 
 class AuthService::AuthServiceImpl
 {
@@ -672,6 +752,226 @@ grpc::ServerUnaryReactor
                        pImpl->mLogger);
 
 }
+
+///-----------------------------------Add Key--------------------------------///
+grpc::ServerUnaryReactor
+*AuthService::AddKey(
+    grpc::CallbackServerContext *context,
+    const UEventAnalysisToolAPI::Auth::V1::AddKeyRequest *request,
+    UEventAnalysisToolAPI::Auth::V1::AddKeyResponse *response)
+{
+    namespace UAuthV1 = UEventAnalysisToolAPI::Auth::V1;
+    class Reactor final : public GRPC::UnaryReactor
+    {
+    public:
+        Reactor(UAuthV1::AddKeyResponse *response,
+                grpc::CallbackServerContext *context,
+                const UAuthV1::AddKeyRequest &request,
+                std::shared_ptr<UAuth::UserLoginAuthority> &loginAuthority,
+                std::shared_ptr<spdlog::logger> loggerPtr) :
+            UnaryReactor(context, "Auth.V1.AddKey", std::move(loggerPtr))
+        {
+            run([&]() -> grpc::Status
+            {
+                // Extract the username and password from Basic
+                auto basicField
+                    = context->client_metadata().find("authorization");
+                if (basicField == context->client_metadata().end())
+                {
+                    return {grpc::StatusCode::UNAUTHENTICATED,
+                            "No authorization header field specified"};
+                }
+                auto userNameAndPassword
+                    = GRPC::authorizationHeaderToUserNameAndPassword(
+                         basicField->second);
+                if (!userNameAndPassword.has_value())
+                {
+                    return userNameAndPassword.error();
+                }
+                if (!request.has_name())
+                {
+                     return {grpc::StatusCode::INVALID_ARGUMENT,
+                             "Key name not set"};
+                }
+                if (!request.has_public_key())
+                {
+                     return {grpc::StatusCode::INVALID_ARGUMENT,
+                             "Public key not set"};
+                }
+                if (!request.has_assertion())
+                {
+                     return {grpc::StatusCode::INVALID_ARGUMENT,
+                             "Assertion not set"};
+                }
+                if (!request.has_algorithm())
+                {
+                    return {grpc::StatusCode::INVALID_ARGUMENT,
+                            "Algorithm not set"};
+                }
+                if (request.algorithm()
+                    != UAuthV1::SignatureAlgorithm::SIGNATURE_ALGORITHM_ED25519)
+                {
+                    return {grpc::StatusCode::INVALID_ARGUMENT,
+                            "Unsupported signature algorithm - only ed25519"};
+                }
+                std::optional<std::chrono::seconds> expiresAfter{std::nullopt};
+                if (request.has_expires_after())
+                {
+                    // N.B. this drops fractional part
+                    expiresAfter
+                        = std::chrono::seconds {request.expires_after().seconds()};
+                }
+                const std::vector<unsigned char>
+                    publicKey{request.public_key().data(),
+                              request.public_key().data()
+                            + request.public_key().size()};
+                auto result
+                    = loginAuthority->addKey(
+                         *userNameAndPassword,
+                         request.name(),
+                         publicKey,
+                         request.assertion(),
+                         expiresAfter);
+                if (!result.has_value())
+                {
+                    SPDLOG_LOGGER_WARN(&logger(),
+                                       "{} - {} could not add key {}",
+                                       requestIdentifier(),
+                                       userNameAndPassword->first,
+                                       request.name());
+                    return ::enumToStatus(result.error(), request.name());
+                 }
+                 SPDLOG_LOGGER_INFO(&logger(),
+                                    "{} - {} added key {}",
+                                    requestIdentifier(),
+                                    userNameAndPassword->first,
+                                    request.name()); 
+                 return grpc::Status::OK;
+            });
+        }
+    };
+    return new Reactor(response,
+                       context,
+                       *request,
+                       pImpl->mLoginAuthority,
+                       pImpl->mLogger);
+
+}
+
+
+///----------------------------------List Keys-------------------------------///
+grpc::ServerUnaryReactor
+*AuthService::ListKeys(
+    grpc::CallbackServerContext *context,
+    const UEventAnalysisToolAPI::Auth::V1::ListKeysRequest *request,
+    UEventAnalysisToolAPI::Auth::V1::ListKeysResponse *response)
+{
+    namespace UAuthV1 = UEventAnalysisToolAPI::Auth::V1;
+    class Reactor final : public GRPC::UnaryReactor
+    {
+    public:
+        Reactor(UAuthV1::ListKeysResponse *response,
+                grpc::CallbackServerContext *context,
+                const UAuthV1::ListKeysRequest &request,
+                UAuth::UserLoginAuthority &loginAuthority,
+                const UAuth::UserTokenVerifier &verifier,
+                std::shared_ptr<spdlog::logger> loggerPtr) :
+            UnaryReactor(context,
+                         "Auth.V1.ListKeys",
+                         std::move(loggerPtr),
+                         verifier)
+        {   
+            if (!isAuthenticated()){return;}
+            run([&]() -> grpc::Status
+            {
+                const auto &user = getClaims()->getUser();
+                auto result = loginAuthority.listKeys(user);
+                if (!result.has_value())
+                {
+                    return ::enumToStatus(result.error(), "");
+                }
+                for (const auto &key : result->first)
+                {
+                    response->mutable_active_keys()->Add(
+                        key.toMessage<UAuthV1::ListKeysResponse::ActiveKey>()
+                    );
+                }
+                for (const auto &key : result->second)
+                {
+                    response->mutable_inactive_keys()->Add(
+                       key.toMessage<UAuthV1::ListKeysResponse::InactiveKey> ()
+                    );
+                }
+                SPDLOG_LOGGER_DEBUG(&logger(),
+                                    "{} - listed keys for {}",
+                                    requestIdentifier(),
+                                    user);
+                return grpc::Status::OK;
+            });
+        }
+    };
+    return new Reactor(response,
+                       context,
+                       *request,
+                       *pImpl->mLoginAuthority,
+                       *pImpl->mTokenVerifier,
+                       pImpl->mLogger);
+}
+
+///----------------------------------Revoke Key------------------------------///
+grpc::ServerUnaryReactor
+*AuthService::RevokeKey(
+    grpc::CallbackServerContext *context,
+    const UEventAnalysisToolAPI::Auth::V1::RevokeKeyRequest *request,
+    UEventAnalysisToolAPI::Auth::V1::RevokeKeyResponse *response)
+{
+    namespace UAuthV1 = UEventAnalysisToolAPI::Auth::V1;
+    class Reactor final : public GRPC::UnaryReactor
+    {   
+    public:
+        Reactor(UAuthV1::RevokeKeyResponse *response,
+                grpc::CallbackServerContext *context,
+                const UAuthV1::RevokeKeyRequest &request,
+                UAuth::UserLoginAuthority &loginAuthority,
+                const UAuth::UserTokenVerifier &verifier,
+                std::shared_ptr<spdlog::logger> loggerPtr) :
+            UnaryReactor(context,
+                         "Auth.V1.RevokeKey",
+                         std::move(loggerPtr),
+                         verifier)
+        {
+            if (!isAuthenticated()){return;}
+            run([&]() -> grpc::Status
+            {
+                const auto &user = getClaims()->getUser();
+                if (!request.has_name())
+                {
+                    return {grpc::StatusCode::INVALID_ARGUMENT,
+                            "Key name is required"};
+                }
+                auto result
+                    = loginAuthority.revokeKey(user, request.name());
+                if (!result.has_value())
+                {
+                    return ::enumToStatus(result.error(), request.name());
+                }
+                SPDLOG_LOGGER_INFO(&logger(),
+                                   "{} - {} revoked key {}",
+                                   requestIdentifier(),
+                                   user,
+                                   request.name());
+                return grpc::Status::OK;
+            });
+        }
+    };
+    return new Reactor(response,
+                       context,
+                       *request,
+                       *pImpl->mLoginAuthority,
+                       *pImpl->mTokenVerifier,
+                       pImpl->mLogger);
+}
+
 
 /// Destructor
 AuthService::~AuthService() = default;

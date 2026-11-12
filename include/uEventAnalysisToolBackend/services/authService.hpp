@@ -73,7 +73,6 @@ public:
             const UEventAnalysisToolAPI::Auth::V1::GetPasswordRequirementsRequest *request,
             UEventAnalysisToolAPI::Auth::V1::PasswordRequirements *response) override;
 
-/*
     grpc::ServerUnaryReactor
         *AddKey(
             grpc::CallbackServerContext *context,
@@ -81,18 +80,16 @@ public:
             UEventAnalysisToolAPI::Auth::V1::AddKeyResponse *response) override;
 
     grpc::ServerUnaryReactor
-        *RevokeKey(
-            grpc::CallbackServerContext *context,
-            const UEventAnalysisToolAPI::Auth::V1::RevokeKeyRequest *request,
-            UEventAnalysisToolAPI::Auth::V1::RevokeKeyResponse *response) override;
-
-    grpc::ServerUnaryReactor
         *ListKeys(
             grpc::CallbackServerContext *context,
             const UEventAnalysisToolAPI::Auth::V1::ListKeysRequest *request,
             UEventAnalysisToolAPI::Auth::V1::ListKeysResponse *response) override;
-*/
 
+    grpc::ServerUnaryReactor
+        *RevokeKey(
+            grpc::CallbackServerContext *context,
+            const UEventAnalysisToolAPI::Auth::V1::RevokeKeyRequest *request,
+            UEventAnalysisToolAPI::Auth::V1::RevokeKeyResponse *response) override;
 
     virtual ~AuthService();
 

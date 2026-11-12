@@ -257,7 +257,7 @@ int UserLoginAuthorityOptions::getMaximumNumberOfLoginKeys() const noexcept
 void UserLoginAuthorityOptions::setMaximumLoginKeyTimeToLive(
     const std::chrono::seconds &timeToLive)
 {
-    if (static_cast<int> (timeToLive.count()) < 1)
+    if (timeToLive <= std::chrono::seconds {0})
     {
         throw std::invalid_argument(
            "Login key time to live must be positive");
@@ -448,7 +448,7 @@ UserLoginAuthorityOptions UserLoginAuthorityOptions::fromInitializationFile(
     int loginKeyTimeToLiveInDays{365};
     loginKeyTimeToLiveInDays
         = propertyTree.get<int> (
-            section + "loginKeyTimeToMaximumTimeLiveInDays",
+            section + "maximumLoginKeyTimeToLiveInDays",
             loginKeyTimeToLiveInDays);
     result.setMaximumLoginKeyTimeToLive(
         std::chrono::days {loginKeyTimeToLiveInDays});

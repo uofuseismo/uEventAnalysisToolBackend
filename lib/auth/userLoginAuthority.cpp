@@ -1007,7 +1007,7 @@ UserLoginAuthority::addKey(
     if (claims == std::nullopt)
     {
         SPDLOG_LOGGER_WARN(pImpl->mLogger,
-                           "Rejecting key login; bad or expired assertion");
+                           "Rejecting proposed key; bad or expired assertion");
         return std::unexpected(UserLoginAuthority::KeyError::InvalidKey);
     }
     if (claims->subject != userName)
@@ -1036,11 +1036,9 @@ UserLoginAuthority::addKey(
             }
             expires = *expiresAfter;
         }
-        std::chrono::seconds expires;
         auto added = pImpl->addUserKey(user,
                                        keyName,
                                        ::encodeBase64(publicKey),
-                                       assertion,
                                        expires);
         if (!added)
         {

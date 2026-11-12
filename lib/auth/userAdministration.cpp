@@ -226,30 +226,6 @@ public:
         const std::string keysQuery{"SELECT name, "
                                   + std::string {Detail::KEY_COLUMNS}
                                   + " FROM auth.admin_list_keys($1)"};
-/*
-        constexpr std::string_view keysQuery{
-            "SELECT name, key_name, algorithm, fingerprint,"
-            "       (EXTRACT(EPOCH FROM created) * 1000000)::BIGINT AS created_us,"
-            "       (EXTRACT(EPOCH FROM expires) * 1000000)::BIGINT AS expired_us,"
-            "       (EXTRACT(EPOCH FROM last_used) * 1000000)::BIGINT AS last_used_us,"
-            "       active,"
-            "       (EXTRACT(EPOCH FROM invalidated) * 1000000)::BIGINT AS invalidated_us,"
-            "       reason"
-            "  FROM auth.admin_list_keys($1)"};
-*/
-/*
-        // Everything below throws on a value the backend does not know -
-        // e.g., a permission level added to the database but not here.
-        // That is a deployment bug, so it surfaces as a server error.
-        const auto requireEd25519 = [](const std::string &algorithm)
-        {
-            if (algorithm != "ed25519")
-            {
-                throw std::runtime_error("Unhandled key algorithm "
-                                       + algorithm);
-            }
-        };
-*/
         try
         {
             return withTransaction<ListTransaction>(
@@ -296,60 +272,6 @@ public:
                         Detail::appendKey(row,
                                           &activeKeys[owner],
                                           &inactiveKeys[owner]);
-/*
-                        requireEd25519(row[2].as<std::string> ());
-                        if (row[7].as<bool> ())
-                        {
-                            ActiveKey key;
-                            key.setName(row[1].as<std::string> ());
-                            key.setAlgorithm(ActiveKey::Algorithm::ed25519);
-                            key.setFingerprint(row[3].as<std::string> ());
-                            key.setWhenRegistered(
-                              std::chrono::microseconds{row[4].as<int64_t> ()});
-                            if (!row[5].is_null())
-                            {
-                                key.setExpiration(
-                                   std::chrono::microseconds{row[5].as<int64_t> ()});
-                            }
-                            if (!row[6].is_null())
-                            {
-                                key.setLastUsed(
-                                   std::chrono::microseconds{row[6].as<int64_t> ()});
-                            }
-                            activeKeys[owner].push_back(std::move(key));
-                        }
-                        else
-                        {
-                            InactiveKey key;
-                            key.setName(row[1].as<std::string> ());
-                            key.setAlgorithm(InactiveKey::Algorithm::ed25519);
-                            key.setFingerprint(row[3].as<std::string> ());
-                            key.setWhenRegistered(
-                                std::chrono::microseconds{row[4].as<int64_t> ()});
-                            if (!row[6].is_null())
-                            {
-                                key.setLastUsed(
-                                    std::chrono::microseconds{row[6].as<int64_t> ()});
-                            }
-                            key.setWhenInvalidated(
-                                    std::chrono::microseconds{row[8].as<int64_t> ()});
-                            const auto reason = row[9].as<std::string> ();
-                            if (reason == "revoked")
-                            {
-                                key.setReason(InactiveKey::Reason::Revoked);
-                            }
-                            else if (reason == "expired")
-                            {
-                                key.setReason(InactiveKey::Reason::Expired);
-                            }
-                            else
-                            {
-                                throw std::runtime_error(
-                                    "Unhandled key state " + reason);
-                            }
-                            inactiveKeys[owner].push_back(std::move(key));
-                        }
-*/
                     }
 
                     // Hands over a user's entries; nobody's means empty.

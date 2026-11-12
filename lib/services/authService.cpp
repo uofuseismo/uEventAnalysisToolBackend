@@ -4,6 +4,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 #include <spdlog/spdlog.h>
@@ -200,7 +201,7 @@ grpc::ServerUnaryReactor
             mLogger(std::move(logger))
         {
             auto requestIdentifier = GRPC::toRequestIdentifier(*context);
-            // Check min version?
+            // Check min version
             if (minimumClientVersion != std::nullopt)
             {
                 auto header 
@@ -386,10 +387,45 @@ grpc::ServerUnaryReactor
                 grpc::CallbackServerContext *context,
                 const UAuthV1::LoginWithKeyRequest &request,
                 std::shared_ptr<UAuth::UserLoginAuthority> &loginAuthority,
+                const std::optional<GRPC::ClientVersion> &minimumClientVersion,
                 std::shared_ptr<spdlog::logger> logger) :
             mLogger(std::move(logger))
         {
             auto requestIdentifier = GRPC::toRequestIdentifier(*context);
+
+            // Check min version
+            if (minimumClientVersion != std::nullopt)
+            {
+                auto header 
+                    = context->client_metadata().find("x-client-version");
+                if (header == context->client_metadata().end())
+                {
+                    context->AddTrailingMetadata(
+                        "x-minimum-client-version",
+                        minimumClientVersion->toString());
+                    Finish({grpc::StatusCode::INVALID_ARGUMENT,
+                            "x-client-version not set in header"});
+                    return;
+                }
+                const auto clientVersion
+                    = GRPC::ClientVersion::parse(
+                          std::string_view {header->second.data(),
+                                            header->second.size()});
+                if (!clientVersion)
+                {
+                    Finish({grpc::StatusCode::INVALID_ARGUMENT,
+                            "x-client-version must be MAJOR.MINOR.PATCH"});
+                    return;
+                }
+                if (clientVersion < *minimumClientVersion)
+                {
+                    Finish({grpc::StatusCode::FAILED_PRECONDITION,
+                           "x-client-version must be at least "
+                          + minimumClientVersion->toString()});
+                    return;
+                }
+            }
+
             if (!request.has_public_key())
             {
                 //metrics.incrementUnauthenticated(mRouteName);
@@ -537,6 +573,7 @@ grpc::ServerUnaryReactor
                        context,
                        *request,
                        pImpl->mLoginAuthority,
+                       pImpl->mMinimumClientVersion,
                        pImpl->mLogger);
 
 }

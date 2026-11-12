@@ -330,6 +330,7 @@ if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
                   testing/services/authService.cpp
                   testing/database/credentials.cpp
                   testing/database/aqms.cpp
+                  testing/grpc/clientVersion.cpp
                   testing/grpc/grpcServerOptions.cpp
                   testing/grpc/parseAuthorizationHeader.cpp
                   testing/grpc/requestIdentifierInterceptor.cpp

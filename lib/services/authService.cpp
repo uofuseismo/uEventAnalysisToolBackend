@@ -764,10 +764,10 @@ grpc::ServerUnaryReactor
     class Reactor final : public GRPC::UnaryReactor
     {
     public:
-        Reactor(UAuthV1::AddKeyResponse *response,
+        Reactor(UAuthV1::AddKeyResponse *, //response,
                 grpc::CallbackServerContext *context,
                 const UAuthV1::AddKeyRequest &request,
-                std::shared_ptr<UAuth::UserLoginAuthority> &loginAuthority,
+                UAuth::UserLoginAuthority &loginAuthority,
                 std::shared_ptr<spdlog::logger> loggerPtr) :
             UnaryReactor(context, "Auth.V1.AddKey", std::move(loggerPtr))
         {
@@ -826,7 +826,7 @@ grpc::ServerUnaryReactor
                               request.public_key().data()
                             + request.public_key().size()};
                 auto result
-                    = loginAuthority->addKey(
+                    = loginAuthority.addKey(
                          *userNameAndPassword,
                          request.name(),
                          publicKey,
@@ -840,20 +840,20 @@ grpc::ServerUnaryReactor
                                        userNameAndPassword->first,
                                        request.name());
                     return ::enumToStatus(result.error(), request.name());
-                 }
-                 SPDLOG_LOGGER_INFO(&logger(),
-                                    "{} - {} added key {}",
-                                    requestIdentifier(),
-                                    userNameAndPassword->first,
-                                    request.name()); 
-                 return grpc::Status::OK;
+                }
+                SPDLOG_LOGGER_INFO(&logger(),
+                                   "{} - {} added key {}",
+                                   requestIdentifier(),
+                                   userNameAndPassword->first,
+                                   request.name()); 
+                return grpc::Status::OK;
             });
         }
     };
     return new Reactor(response,
                        context,
                        *request,
-                       pImpl->mLoginAuthority,
+                       *pImpl->mLoginAuthority,
                        pImpl->mLogger);
 
 }

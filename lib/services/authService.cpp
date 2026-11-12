@@ -21,6 +21,7 @@
 #include "uEventAnalysisToolBackend/auth/userLoginAuthority.hpp"
 #include "uEventAnalysisToolBackend/auth/userTokenVerifier.hpp"
 #include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
+#include "uEventAnalysisToolBackend/grpc/clientVersion.hpp"
 #include "uEventAnalysisToolBackend/grpc/parseAuthorizationHeader.hpp"
 #include "uEventAnalysisToolBackend/grpc/requireBearer.hpp"
 #include "uEventAnalysisToolBackend/grpc/toRequestIdentifier.hpp"
@@ -160,6 +161,7 @@ public:
 //private:
     std::shared_ptr<UAuth::UserLoginAuthority> mLoginAuthority{nullptr};
     std::shared_ptr<UAuth::UserTokenVerifier> mTokenVerifier{nullptr};
+    std::optional<GRPC::ClientVersion> mMinimumClientVersion{std::nullopt};
     std::shared_ptr<spdlog::logger> mLogger{nullptr};
 };
 
@@ -193,10 +195,44 @@ grpc::ServerUnaryReactor
                 grpc::CallbackServerContext *context,
                 const UAuthV1::LoginWithPasswordRequest &request,
                 std::shared_ptr<UAuth::UserLoginAuthority> &loginAuthority,
+                const std::optional<GRPC::ClientVersion> &minimumClientVersion,
                 std::shared_ptr<spdlog::logger> logger) :
             mLogger(std::move(logger))
         {
             auto requestIdentifier = GRPC::toRequestIdentifier(*context);
+            // Check min version?
+            if (minimumClientVersion != std::nullopt)
+            {
+                auto header 
+                    = context->client_metadata().find("x-client-version");
+                if (header == context->client_metadata().end())
+                {
+                    context->AddTrailingMetadata(
+                        "x-minimum-client-version",
+                        minimumClientVersion->toString());
+                    Finish({grpc::StatusCode::INVALID_ARGUMENT,
+                            "x-client-version not set in header"});
+                    return;
+                }
+                const auto clientVersion
+                    = GRPC::ClientVersion::parse(
+                          std::string_view {header->second.data(),
+                                            header->second.size()});
+                if (!clientVersion)
+                {
+                    Finish({grpc::StatusCode::INVALID_ARGUMENT,
+                            "x-client-version must be MAJOR.MINOR.PATCH"});
+                    return;
+                }
+                if (clientVersion < *minimumClientVersion)
+                {
+                    Finish({grpc::StatusCode::FAILED_PRECONDITION,
+                           "x-client-version must be at least "
+                          + minimumClientVersion->toString()});
+                    return;
+                }
+            }
+
             // Extract the username and password from Basic
             auto basicField = context->client_metadata().find("authorization");
             if (basicField == context->client_metadata().end())
@@ -330,6 +366,7 @@ grpc::ServerUnaryReactor
                        context,
                        *request,
                        pImpl->mLoginAuthority,
+                       pImpl->mMinimumClientVersion,
                        pImpl->mLogger);
 
 }

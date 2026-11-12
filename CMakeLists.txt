@@ -316,6 +316,7 @@ if (PROJECT_IS_TOP_LEVEL AND ${BUILD_TESTS})
                   testing/auth/administratorLoginAuthority.cpp
                   testing/auth/userLoginAuthority.cpp
                   testing/auth/userKeys.cpp
+                  testing/auth/userKeysList.cpp
                   testing/auth/userAdministration.cpp
                   testing/auth/databaseReconnect.cpp
                   testing/auth/password/hasher.cpp

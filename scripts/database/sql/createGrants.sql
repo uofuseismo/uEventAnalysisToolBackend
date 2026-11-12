@@ -103,6 +103,5 @@ GRANT EXECUTE ON FUNCTION
     auth.list_user_schemas(TEXT),
     auth.list_user_keys(TEXT),
     auth.user_is_admin(TEXT),
-    auth.count_active_admins(),
-    auth.list_users()
+    auth.count_active_admins()
     TO :"rw_role", :"ro_role";

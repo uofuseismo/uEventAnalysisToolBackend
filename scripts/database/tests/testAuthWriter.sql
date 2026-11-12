@@ -498,11 +498,11 @@ BEGIN
     IF n <> 1 THEN
         RAISE EXCEPTION 'FAIL: sweep deleted % users, expected 1 (frank)', n;
     END IF;
-    IF EXISTS (SELECT 1 FROM auth.list_users() WHERE name = 'frank') THEN
+    IF auth.get_user_name('frank') IS NOT NULL THEN
         RAISE EXCEPTION 'FAIL: frank survived the sweep';
     END IF;
     --- Forgetting a password must not cost anyone their account.
-    IF NOT EXISTS (SELECT 1 FROM auth.list_users() WHERE name = 'alice') THEN
+    IF auth.get_user_name('alice') IS NULL THEN
         RAISE EXCEPTION 'FAIL: the sweep deleted alice, an established user';
     END IF;
     IF auth.get_user_permission('alice', 'utah') IS DISTINCT FROM 'read_write' THEN
@@ -875,18 +875,26 @@ END $$;
 
 DO $$
 BEGIN
-    IF (SELECT array_agg(name ORDER BY name) FROM auth.list_users())
+    IF (SELECT array_agg(name ORDER BY name) FROM auth.admin_list_users('root'))
        IS DISTINCT FROM ARRAY['alice', 'carol', 'dave', 'root'] THEN
         RAISE EXCEPTION 'FAIL: unexpected users: %',
-            (SELECT array_agg(name ORDER BY name) FROM auth.list_users());
+            (SELECT array_agg(name ORDER BY name)
+               FROM auth.admin_list_users('root'));
     END IF;
+    --- No listing hands out a hash: only get_password_hash may.
     IF EXISTS (SELECT 1 FROM pg_proc p
                  JOIN pg_namespace n ON n.oid = p.pronamespace
-                WHERE n.nspname = 'auth' AND p.proname = 'list_users'
+                WHERE n.nspname = 'auth' AND p.proname LIKE '%list%'
                   AND 'password_hash' = ANY(p.proargnames)) THEN
-        RAISE EXCEPTION 'FAIL: list_users exposes password_hash';
+        RAISE EXCEPTION 'FAIL: a listing exposes password_hash';
     END IF;
-    RAISE NOTICE 'ok: list_users';
+    --- The ungated listing is gone, not just ungranted.
+    IF EXISTS (SELECT 1 FROM pg_proc p
+                 JOIN pg_namespace n ON n.oid = p.pronamespace
+                WHERE n.nspname = 'auth' AND p.proname = 'list_users') THEN
+        RAISE EXCEPTION 'FAIL: auth.list_users still exists';
+    END IF;
+    RAISE NOTICE 'ok: listing users needs an administrator';
 END $$;
 
 --------------------------------------------------------------------------

@@ -203,7 +203,7 @@ first_rc=0
 wait "${first_pid}" || first_rc=$?
 
 admins=$(as_role rw --tuples-only --no-align \
-           -c "SELECT string_agg(name, ',' ORDER BY name) FROM auth.list_users() WHERE auth.user_is_admin(name);")
+           -c "SELECT string_agg(name, ',' ORDER BY name) FROM auth.admin_list_users('admin_one') WHERE auth.user_is_admin(name);")
 if [[ ${first_rc} -ne 0 ]] || ! grep -q '^t$' "${first_log}"; then
   echo "FAIL: the first removal should have succeeded:" >&2
   cat "${first_log}" >&2

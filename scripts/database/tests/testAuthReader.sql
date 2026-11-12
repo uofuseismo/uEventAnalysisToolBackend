@@ -57,7 +57,6 @@ BEGIN
     END IF;
     PERFORM * FROM auth.list_user_schemas('alice');
     PERFORM * FROM auth.list_user_keys('alice');
-    PERFORM * FROM auth.list_users();
     RAISE NOTICE 'ok: reader can verify and look up';
 END $$;
 

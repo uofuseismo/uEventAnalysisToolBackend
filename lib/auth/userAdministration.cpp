@@ -23,6 +23,7 @@
 #include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
 //#include "uEventAnalysisToolBackend/database/credentials.hpp"
 #include "databaseUtilities.hpp"
+#include "keyRows.hpp"
 
 using namespace UEventAnalysisToolBackend::Auth;
 
@@ -200,7 +201,7 @@ public:
         }
     }
 
-    /// @brief 
+    /// @brief List the users, keys, schema permissions
     [[nodiscard]] std::expected<UserList, ReturnCode> 
         listUsers(const std::string &actor)
     {
@@ -222,15 +223,21 @@ public:
             "SELECT name, schema_name, permission_name,"
             "       (EXTRACT(EPOCH FROM granted) * 1000000)::BIGINT"
             "  FROM auth.admin_list_permissions($1)"};
+        const std::string keysQuery{"SELECT name, "
+                                  + std::string {Detail::KEY_COLUMNS}
+                                  + " FROM auth.admin_list_keys($1)"};
+/*
         constexpr std::string_view keysQuery{
             "SELECT name, key_name, algorithm, fingerprint,"
-            "       (EXTRACT(EPOCH FROM created) * 1000000)::BIGINT,"
-            "       (EXTRACT(EPOCH FROM expires) * 1000000)::BIGINT,"
-            "       (EXTRACT(EPOCH FROM last_used) * 1000000)::BIGINT,"
+            "       (EXTRACT(EPOCH FROM created) * 1000000)::BIGINT AS created_us,"
+            "       (EXTRACT(EPOCH FROM expires) * 1000000)::BIGINT AS expired_us,"
+            "       (EXTRACT(EPOCH FROM last_used) * 1000000)::BIGINT AS last_used_us,"
             "       active,"
-            "       (EXTRACT(EPOCH FROM invalidated) * 1000000)::BIGINT,"
+            "       (EXTRACT(EPOCH FROM invalidated) * 1000000)::BIGINT AS invalidated_us,"
             "       reason"
             "  FROM auth.admin_list_keys($1)"};
+*/
+/*
         // Everything below throws on a value the backend does not know -
         // e.g., a permission level added to the database but not here.
         // That is a deployment bug, so it surfaces as a server error.
@@ -242,6 +249,7 @@ public:
                                        + algorithm);
             }
         };
+*/
         try
         {
             return withTransaction<ListTransaction>(
@@ -285,6 +293,10 @@ public:
                          transaction.exec(keysQuery, parameters))
                     {
                         const auto owner = row[0].as<std::string> ();
+                        Detail::appendKey(row,
+                                          &activeKeys[owner],
+                                          &inactiveKeys[owner]);
+/*
                         requireEd25519(row[2].as<std::string> ());
                         if (row[7].as<bool> ())
                         {
@@ -337,6 +349,7 @@ public:
                             }
                             inactiveKeys[owner].push_back(std::move(key));
                         }
+*/
                     }
 
                     // Hands over a user's entries; nobody's means empty.

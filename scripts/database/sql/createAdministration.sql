@@ -257,19 +257,12 @@ $$ LANGUAGE plpgsql;
 ---                          Listing users                              ---
 --------------------------------------------------------------------------
 
---- Every user and their state, with no password_hash: shaped to be
---- safe to hand to a frontend.  Ungated because nothing here is secret
---- from a logged-in user of a small organization; gate it in the
---- backend if that changes.
-CREATE OR REPLACE FUNCTION auth.list_users()
-RETURNS TABLE(name TEXT, is_admin BOOLEAN, provisional_until TIMESTAMPTZ,
-              activated TIMESTAMPTZ, created TIMESTAMPTZ,
-              password_updated TIMESTAMPTZ, last_login TIMESTAMPTZ) AS $$
-    SELECT u.name, u.is_admin, u.provisional_until, u.activated,
-           u.created, u.password_updated, u.last_login
-      FROM auth.users u
-     ORDER BY u.name;
-$$ LANGUAGE sql;
+--- There used to be an ungated auth.list_users() here, granted to both
+--- backends.  It let the read-only backend enumerate every account --
+--- names, who is an administrator, who holds an issued password -- which
+--- is exactly what an attacker probing logins wants.  admin_list_users
+--- replaced it; dropped so an upgraded database does not keep it.
+DROP FUNCTION IF EXISTS auth.list_users();
 
 --- The administrator's view: three listings, one row shape each, that
 --- the backend stitches together by name.  Call all three in ONE

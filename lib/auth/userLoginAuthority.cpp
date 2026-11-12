@@ -27,8 +27,9 @@
 // NOLINTNEXTLINE(misc-include-cleaner)
 #include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
-//#include "uEventAnalysisToolBackend/auth/userList.hpp"
+#include "uEventAnalysisToolBackend/auth/userList.hpp"
 #include "databaseUtilities.hpp"
+#include "keyRows.hpp"
 
 using namespace UEventAnalysisToolBackend::Auth;
 
@@ -478,6 +479,30 @@ public:
                 transaction.commit();
                 return added;
             });                   
+    }
+
+    /// @brief List the user's keys.
+    [[nodiscard]] 
+    std::pair< std::vector<ActiveKey>, std::vector<InactiveKey > >
+        listUserKeys(const std::string &user)
+    {
+        const std::string keysQuery{"SELECT "
+                                  + std::string {Detail::KEY_COLUMNS}
+                                  + " FROM auth.list_user_keys($1)"};
+        const pqxx::params parameters{user};
+        return withTransaction<pqxx::read_transaction>(
+            [&](pqxx::read_transaction &transaction) ->
+            std::pair< std::vector<ActiveKey>, std::vector<InactiveKey > >
+            {
+                std::vector<ActiveKey> activeKeys;
+                std::vector<InactiveKey> inactiveKeys;
+                for (const auto &row :
+                     transaction.exec(keysQuery, parameters))
+                {
+                    Detail::appendKey(row, &activeKeys, &inactiveKeys);
+                }
+                return std::pair{activeKeys, inactiveKeys};
+            });
     }
 
     /// @result  True indicates the user's key was revoked.
@@ -1174,11 +1199,69 @@ UserLoginAuthority::revokeKey(
     {
         SPDLOG_LOGGER_ERROR(pImpl->mLogger,
                             "Failed to revoke key for {} because {}",
-                            user, e.what());
+                            userName, e.what());
         return std::unexpected(
            UserLoginAuthority::KeyError::ServerError);
     }
     return {};
+}
+
+/// List user keys
+std::expected
+<
+    std::pair
+    <
+        std::vector<ActiveKey>,
+        std::vector<InactiveKey>
+    >,
+    UserLoginAuthority::KeyError
+> UserLoginAuthority::listKeys(const std::string &user) const
+{
+    if (!isInitialized())
+    {
+        SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+                            "UserLoginAuthority not initialized");
+        return std::unexpected(
+           UserLoginAuthority::KeyError::ServerError);
+    }
+    if (user.empty())
+    {
+        return std::unexpected(
+            UserLoginAuthority::KeyError::Unauthenticated);
+    }
+    // Get the corresponding normalized name from the database
+    std::string userName;
+    try
+    {
+        auto userNameResult = pImpl->getUserName(user);
+        if (!userNameResult.has_value())
+        {
+            SPDLOG_LOGGER_WARN(pImpl->mLogger,
+            "Could not get user name {} from database", user);
+            return std::unexpected(
+               UserLoginAuthority::KeyError::Unauthenticated);
+        }
+        userName = std::move(*userNameResult);
+    }
+    catch (const std::exception &e)
+    {
+        SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+                            "User lookup failed because {}",
+                            e.what());
+        return std::unexpected(UserLoginAuthority::KeyError::ServerError);
+    }
+    try
+    {
+        return pImpl->listUserKeys(userName);
+    }
+    catch (const std::exception &e)
+    {
+        SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+                            "Failed list keys for {} because {}",
+                            userName, e.what());
+        return std::unexpected(
+           UserLoginAuthority::KeyError::ServerError);
+    }
 }
 
 /// Destructor

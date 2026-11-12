@@ -1023,22 +1023,32 @@ UserLoginAuthority::addKey(
         std::chrono::seconds expires{
             pImpl->mOptions.getMaximumLoginKeyTimeToLive()};
         if (expiresAfter != std::nullopt)
-        { 
+        {
             if (expiresAfter->count() < 1)
             {
                 return std::unexpected(
-                   UserLoginAuthority::KeyError::InvalidExpiration);
+                    UserLoginAuthority::KeyError::InvalidExpiration);
+            }
+            if (*expiresAfter > pImpl->mOptions.getMaximumLoginKeyTimeToLive())
+            {
+                return std::unexpected(
+                    UserLoginAuthority::KeyError::InvalidExpiration);
             }
             expires = *expiresAfter;
         }
-/*
         std::chrono::seconds expires;
-        pImpl->addUserKey(user,
-                          keyName,
-                          ::encodeBase64(publicKey),
-                          assertion,
-                          expires);
-*/
+        auto added = pImpl->addUserKey(user,
+                                       keyName,
+                                       ::encodeBase64(publicKey),
+                                       assertion,
+                                       expires);
+        if (!added)
+        {
+            SPDLOG_LOGGER_ERROR(pImpl->mLogger,
+                                "{} vanished while adding key {}",
+                                user, keyName);
+            return std::unexpected(KeyError::ServerError);
+        }
     }
     catch (const pqxx::insufficient_privilege &)
     {
@@ -1105,6 +1115,8 @@ UserLoginAuthority::revokeKey(
         return std::unexpected(
            UserLoginAuthority::KeyError::NoKeyFound);
     } 
+
+    return {};
 }
 
 /// Destructor

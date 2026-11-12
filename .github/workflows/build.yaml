@@ -25,6 +25,13 @@ env:
   CXX: clang++
 
 jobs:
+  # The SQL suite, in parallel with the build: a minute against an hour,
+  # so it costs nothing.  The integration tests wait on it, so a schema
+  # problem is reported as one instead of as C++ tests failing.
+  database:
+    name: Database
+    uses: ./.github/workflows/database.yaml
+
   build:
     runs-on: ${{ matrix.distro }}
     strategy:
@@ -101,7 +108,7 @@ jobs:
         uses: ./.github/actions/upload-build-directory
 
   test:
-    needs: build
+    needs: [build, database]
     runs-on: ${{ matrix.distro }}
     strategy:
       fail-fast: false
@@ -146,8 +153,11 @@ jobs:
           ./build/Release/unitTests
 
       # The roles' passwords are made per run and masked; the schema is
-      # built by the same script a deployment uses.
+      # built by the same script a deployment uses.  This and the
+      # integration tests run even if the unit tests failed, so one
+      # run reports both.
       - name: Create the test database
+        if: ${{ !cancelled() }}
         env:
           PGHOST: localhost
           PGPORT: '55432'
@@ -168,6 +178,7 @@ jobs:
       # The backend role is what the authorities connect as; the
       # superuser only seeds and removes the test users.
       - name: Run integration tests
+        if: ${{ !cancelled() }}
         env:
           UEAT_TEST_DB_HOST: localhost
           UEAT_TEST_DB_PORT: '55432'

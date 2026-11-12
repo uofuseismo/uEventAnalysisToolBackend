@@ -1,10 +1,15 @@
 name: Database
 run-name: Database tests for ${{ github.ref_name }}
 
-# Only the SQL and its scripts can break these tests, so nothing else
-# triggers them.  This job needs no build: a regression in the schema
-# fails here in a minute instead of after a C++ build.
+# Only the SQL and its scripts can break these tests, so on its own
+# nothing else triggers them.  This job needs no build: a regression in
+# the schema fails here in a minute instead of after a C++ build.
+#
+# Build also calls it (workflow_call), alongside the C++ build and ahead
+# of the integration tests, so a broken schema shows up there as a SQL
+# failure rather than as integration tests failing for no clear reason.
 on:
+  workflow_call:
   push:
     branches: [main]
     paths:
@@ -17,8 +22,11 @@ on:
       - '.github/workflows/database.yaml'
   workflow_dispatch:
 
+# When Build calls this, github.workflow is "Build", so the suffix keeps
+# the group apart from Build's own - sharing one would have the called
+# workflow cancel, or wait on, its caller.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-database-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

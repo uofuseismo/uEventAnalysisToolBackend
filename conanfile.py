@@ -31,7 +31,7 @@ class uWaveServer(ConanFile):
        self.requires("spdlog/1.17.0")
        self.requires("jwt-cpp/0.7.2")
        #self.requires("onetbb/2022.3.0")
-       self.requires("libpqxx/8.0.1")
+       self.requires("libpqxx/8.0.2")
        self.requires("boost/1.91.0")
        #self.requires("openldap/2.6.7")
        #self.requires("openssl/4.0.1")

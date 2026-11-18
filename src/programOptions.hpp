@@ -19,6 +19,7 @@
 #include "uEventAnalysisToolBackend/auth/userLoginAuthorityOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/hasherOptions.hpp"
 #include "uEventAnalysisToolBackend/auth/password/passwordPolicy.hpp"
+#include "uEventAnalysisToolBackend/grpc/clientVersion.hpp"
 #include "uEventAnalysisToolBackend/grpc/serverOptions.hpp"
 #include "uEventAnalysisToolBackend/grpc/grpcServerOptions.hpp"
 #include "otelOptions.hpp"
@@ -115,6 +116,13 @@ struct ProgramOptions
                  iniFile, "GRPCServer"); 
         grpcServerOptions.setGRPCOptions(serverGRPCOptions);
 
+        // Client version
+        auto minimumClientVersionString
+              = propertyTree.get<std::string> (
+                   "UserLoginAuthority.miniumClientVersion", "0.0.0");
+        minimumClientVersion
+              = UEAT::GRPC::ClientVersion(minimumClientVersionString);
+
         // Backend database
         //backendDatabaseCredentials
         //    = UEAT::Database::Credentials::fromInitializationFile(
@@ -166,6 +174,7 @@ struct ProgramOptions
     //UEventAnalysisToolBackend::Auth::Password::HasherOptions passwordHasherOptions;
     //UEventAnalysisToolBackend::Auth::Password::PasswordPolicy passwordPolicy;
     //UEventAnalysisToolBackend::Auth::DatabaseOptions authDatabaseOptions;
+    UEventAnalysisToolBackend::GRPC::ClientVersion minimumClientVersion{"0.0.0"};
     UEventAnalysisToolBackend::GRPC::ServerOptions grpcServerOptions;
     MapServerOptions mapServerOptions;
     std::string applicationName{APPLICATION_NAME};

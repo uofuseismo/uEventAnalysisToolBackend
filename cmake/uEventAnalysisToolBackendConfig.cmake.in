@@ -10,7 +10,7 @@
 # ``uEventAnalysisToolBackend_FOUND``
 #   True indicates uEventAnalysisToolBackend was found.
 # ``uEventAnalysisToolBackend::uEventAnalysisToolBackend``
-#   The filter picker library, if found.
+#   The event analysis tool library, if found.
 include(CMakeFindDependencyMacro)
 
 find_dependency(gRPC CONFIG)

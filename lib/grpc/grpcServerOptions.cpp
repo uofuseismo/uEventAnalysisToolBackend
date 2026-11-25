@@ -386,19 +386,19 @@ GRPCServerOptions GRPCServerOptions::fromInitializationFile(
     int maxConnectionAgeMilliS{
        static_cast<int> (options.getMaximumConnectionAge().count())};
     maxConnectionAgeMilliS 
-         = ::getOrDefault<int> (propertyTree,
-                                section + "maximumConnectionAgeInMilliSeconds",
-                                maxConnectionAgeMilliS);
+        = ::getOrDefault<int> (propertyTree,
+                               section + "maximumConnectionAgeInMilliSeconds",
+                               maxConnectionAgeMilliS);
     options.setMaximumConnectionAge(
         std::chrono::milliseconds(maxConnectionAgeMilliS));
 
     int maxGracePeriodMilliS{
         static_cast<int> (options.getMaximumConnectionAgeGracePeriod().count())};
     maxGracePeriodMilliS
-          = ::getOrDefault<int> (
-                propertyTree,
-                section + "maximumConnectionAgeGracePeriodInMilliSeconds",
-                maxGracePeriodMilliS);
+        = ::getOrDefault<int> (
+              propertyTree,
+              section + "maximumConnectionAgeGracePeriodInMilliSeconds",
+              maxGracePeriodMilliS);
     options.setMaximumConnectionAgeGracePeriod(
         std::chrono::milliseconds(maxGracePeriodMilliS));
 

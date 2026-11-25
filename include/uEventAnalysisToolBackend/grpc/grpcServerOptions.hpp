@@ -32,8 +32,8 @@ public:
     [[nodiscard]] uint16_t getPort() const noexcept;
 
     /// @brief Convenience function that combines the host and port into a
-    ///        gRPC address - i.e., host:post
-    /// @reuslt The gRPC address.
+    ///        gRPC address - i.e., host:port
+    /// @result The gRPC address.
     [[nodiscard]] std::string getAddress() const noexcept; 
 
     /// @brief Sets the API access token.
